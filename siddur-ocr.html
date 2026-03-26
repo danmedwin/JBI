@@ -85,6 +85,14 @@ input[type="range"] { width: 100%; accent-color: #a07830; margin-top: 10px; }
 .how-it-works { margin-top: 40px; color: #8a8070; font-size: 13px; line-height: 1.8; }
 .how-it-works .title { font-weight: 700; color: #5a5040; margin-bottom: 8px; }
 .how-it-works .num { color: #a07830; font-weight: 700; }
+.next-steps { margin-top: 24px; border: 1px solid rgba(200,164,78,0.3); border-radius: 12px; padding: 20px 24px; background: rgba(200,164,78,0.06); }
+.next-steps .step-title { font-size: 16px; font-weight: 600; color: #2a2518; margin-bottom: 6px; }
+.next-steps .step-desc { font-size: 14px; color: #5a5040; line-height: 1.7; margin-bottom: 16px; }
+.next-steps .step-desc code { font-family: 'Menlo','Monaco','Courier New', monospace; font-size: 13px; background: rgba(58,53,40,0.08); padding: 2px 6px; border-radius: 4px; }
+.next-steps .reqs { font-size: 12px; color: #8a8070; line-height: 1.7; margin-top: 12px; }
+.next-steps .reqs strong { color: #5a5040; }
+.btn-outline { width: 100%; padding: 12px 20px; font-size: 15px; font-weight: 600; color: #5a7040; background: #fff; border: 2px solid #5a7040; border-radius: 10px; cursor: pointer; font-family: 'Georgia', serif; transition: all 0.15s ease; }
+.btn-outline:hover { background: rgba(90,112,64,0.06); }
 .hidden { display: none !important; }
 </style>
 </head>
@@ -206,6 +214,26 @@ input[type="range"] { width: 100%; accent-color: #a07830; margin-top: 10px; }
   <div class="hidden" id="resultsSection">
     <div class="card" id="resultsSummary"></div>
     <button class="btn btn-dl" id="downloadBtn">⬇ Download Word Document</button>
+  </div>
+
+  <!-- Next Steps: Page Numberer -->
+  <div class="hidden" id="nextStepsSection">
+    <div class="next-steps">
+      <div class="step-title">📋 Next Step: Page Numbering</div>
+      <div class="step-desc">
+        The Word document above uses the source siddur's page numbers as markers. When the output is longer than the original (e.g., large font), a single source page may span multiple Word pages. The <strong>Page Numberer</strong> script detects these overflows and adds lettered suffixes (e.g., 42a, 42b) so every Word page has a unique number.
+      </div>
+      <div class="step-desc">
+        <strong>Option A:</strong> Upload the downloaded .docx to <a href="https://claude.ai" target="_blank" style="color:#2E75B6">claude.ai</a> and ask Claude to run the page numberer on it.<br>
+        <strong>Option B:</strong> Run the script locally on your computer (requires Python 3 and LibreOffice):
+      </div>
+      <button class="btn-outline" id="downloadScriptBtn">⬇ Download siddur_page_numberer.py</button>
+      <div class="reqs">
+        <strong>Requirements:</strong> Python 3, LibreOffice, and: <code>pip3 install python-docx pypdf lxml</code><br>
+        <strong>Usage:</strong> <code>python3 siddur_page_numberer.py my_siddur_processed.docx</code><br>
+        <strong>Output:</strong> Creates a <code>_numbered.docx</code> file with lettered page suffixes where needed.
+      </div>
+    </div>
   </div>
 
   <!-- Debug Log -->
@@ -833,6 +861,7 @@ function renderResults() {
   }
   $("resultsSummary").innerHTML = html;
   show("resultsSection");
+  show("nextStepsSection");
 }
 
 /* ═══════════════════════════════════════════
@@ -853,7 +882,7 @@ async function handleFile(file) {
   state.debugLog = [];
   state.status = "detecting";
 
-  hide("errorBox"); hide("resultsSection"); hide("howItWorks");
+  hide("errorBox"); hide("resultsSection"); hide("nextStepsSection"); hide("howItWorks");
   $("fileName").textContent = "📄 " + file.name;
   $("fileSize").textContent = "(" + (file.size / 1024 / 1024).toFixed(1) + " MB)";
   show("fileInfo"); hide("resetBtn");
@@ -937,7 +966,7 @@ async function beginProcessing() {
   state.footnotes = [];
   state.docBlob = null;
   state.skippedPages = [];
-  hide("errorBox"); hide("resultsSection"); hide("beginBtn");
+  hide("errorBox"); hide("resultsSection"); hide("nextStepsSection"); hide("beginBtn");
 
   const layout = LAYOUTS[state.selectedLayout] || LAYOUTS.other;
   let sysPrompt = CONTEXT_PREAMBLE + layout.systemPrompt;
@@ -1046,7 +1075,7 @@ function resetAll() {
 
   hide("fileInfo"); hide("thumbSection"); hide("detectingArea"); hide("layoutSection");
   hide("fontSection"); hide("notesSection"); hide("tokenSection"); hide("beginBtn");
-  hide("progressSection"); hide("errorBox"); hide("resultsSection"); hide("debugSection");
+  hide("progressSection"); hide("errorBox"); hide("resultsSection"); hide("nextStepsSection"); hide("debugSection");
   hide("detectionBox"); hide("detectedReason");
   show("howItWorks");
   $("debugPanel").classList.add("hidden");
@@ -1093,6 +1122,24 @@ $("debugToggle").addEventListener("click", () => {
   state.debugVisible = !state.debugVisible;
   $("debugPanel").classList.toggle("hidden", !state.debugVisible);
   $("debugToggle").textContent = (state.debugVisible ? "Hide" : "Show") + " Debug Log (" + state.debugLog.length + ")";
+});
+
+$("downloadScriptBtn").addEventListener("click", async () => {
+  // Try to fetch from the same GitHub Pages directory
+  const scriptUrl = "siddur_page_numberer.py";
+  try {
+    const resp = await fetch(scriptUrl);
+    if (!resp.ok) throw new Error("Not found");
+    const text = await resp.text();
+    const blob = new Blob([text], { type: "text/x-python" });
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = u; a.download = "siddur_page_numberer.py";
+    a.style.display = "none"; document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(u); }, 1000);
+  } catch (e) {
+    alert("Could not download the script automatically. Please get it from:\nhttps://github.com/danmedwin/JBI/blob/main/siddur_page_numberer.py");
+  }
 });
 
 </script>
