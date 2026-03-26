@@ -360,7 +360,7 @@ Kol Haneshamah layout:
 - English translation/reading may appear
 - Instructions in italics
 - Bottom of page: LEFT-ALIGNED text = SECTION NAME; RIGHT-ALIGNED text = SERVICE NAME
-- Footnotes below horizontal rule
+- Footnotes below horizontal rule — EVERYTHING below a horizontal line is a footnote, even if it looks like a reading, commentary, kavanah, or source reference. This includes any Hebrew text that appears below the line.
 
 Element types:
 - page_number: Page number — either from the running header "SECTION / NUMBER" or from the bottom of the page. Extract ONLY the number.
@@ -371,7 +371,7 @@ Element types:
 - hebrew_liturgy: Hebrew WITH ALL NIKKUD. Two-column text MUST be merged into continuous lines as described above. Join all lines of a block into one element.
 - transliteration: Phonetic English. Use plain English letters only — no diacritical dots or marks on letters (e.g., write "h" not "ḥ", "t" not "ṭ").
 - translation: English meaning. Use <i>...</i> for italics. Preserve paragraph breaks.
-- footnote: Text below horizontal rule. Use <i>...</i> for italic portions.
+- footnote: ALL text below a horizontal rule — commentaries, kavanot, source references, readings, and any other content. Use <i>...</i> for italic portions. If Hebrew text appears below the line (e.g., source incipits like כִּי...יְרוּשָׁלִָם), include it IN the footnote element — do NOT create a separate hebrew_liturgy element for it.
 
 Return using XML:
 <elements>
@@ -386,7 +386,7 @@ Return using XML:
 
 ORDERING: section_header first, then hebrew_liturgy → transliteration → translation, page_number LAST.
 
-FINAL REMINDER: (1) Hebrew nikkud MUST be present. (2) Two-column Hebrew MUST be merged into continuous lines, not kept as separate columns. Double-check both before returning.
+FINAL REMINDER: (1) Hebrew nikkud MUST be present. (2) Two-column Hebrew MUST be merged into continuous lines, not kept as separate columns. (3) EVERYTHING below a horizontal line is a footnote — Hebrew below the line stays in the footnote, not as a separate element. Double-check all three before returning.
 
 Return ONLY the XML block.`
   },
