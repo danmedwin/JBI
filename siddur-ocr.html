@@ -309,7 +309,7 @@ Element types:
 - bottom_service_name: Right-aligned text at bottom = service name.
 - instructions: Italicized directions. Entirely italic — no <i> tags.
 - hebrew_liturgy: Hebrew WITH ALL NIKKUD. Two-column text MUST be merged into continuous lines as described above. Join all lines of a block into one element.
-- transliteration: Phonetic English. Capture exactly as seen.
+- transliteration: Phonetic English. Use plain English letters only — no diacritical dots or marks on letters (e.g., write "h" not "ḥ", "t" not "ṭ").
 - translation: English meaning. Use <i>...</i> for italics. Preserve paragraph breaks.
 - footnote: Text below horizontal rule. Use <i>...</i> for italic portions.
 
@@ -468,7 +468,13 @@ function reorderElements(elements) {
   flush(); return result;
 }
 
-function stripLatinDiacritics(t) { return t.replace(/[\u0304\u0306\u0307\u0323\u0330\u0331\u0332]/g, ""); }
+function stripLatinDiacritics(t) {
+  // Strip combining diacritics (dot below, macron, breve, etc.)
+  t = t.replace(/[\u0304\u0306\u0307\u0323\u0330\u0331\u0332]/g, "");
+  // Replace precomposed dotted/accented Latin characters with plain equivalents
+  const map = {"\u1E25":"h","\u1E24":"H","\u1E6D":"t","\u1E6C":"T","\u1E63":"s","\u1E62":"S","\u1E93":"z","\u1E92":"Z","\u1E0D":"d","\u1E0C":"D","\u1E37":"l","\u1E36":"L","\u1E47":"n","\u1E46":"N","\u1E5B":"r","\u1E5A":"R"};
+  return t.replace(/[\u1E24\u1E25\u1E6C\u1E6D\u1E62\u1E63\u1E92\u1E93\u1E0C\u1E0D\u1E36\u1E37\u1E46\u1E47\u1E5A\u1E5B]/g, c => map[c] || c);
+}
 
 function parseItalicSpans(raw) {
   const spans = []; const re = /<i>([\s\S]*?)<\/i>/g; let last = 0, m;
