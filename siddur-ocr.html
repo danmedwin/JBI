@@ -7,6 +7,16 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { min-height: 100vh; background: linear-gradient(160deg, #f5f0e6 0%, #ebe4d4 50%, #e0d8c4 100%); font-family: 'Georgia', 'Palatino Linotype', serif; padding: 0 16px; }
+#password-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+#password-gate .gate-box { text-align: center; max-width: 360px; width: 100%; }
+#password-gate .gate-icon { font-size: 48px; margin-bottom: 16px; }
+#password-gate h2 { font-size: 24px; font-weight: 400; color: #2a2518; margin-bottom: 8px; }
+#password-gate .gate-sub { color: #7a7060; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+#password-gate input { width: 100%; padding: 12px 16px; font-size: 16px; border-radius: 10px; border: 1px solid #c8b898; background: #fff; color: #2a2518; font-family: 'Georgia', serif; text-align: center; }
+#password-gate input:focus { outline: none; border-color: #a07830; box-shadow: 0 0 0 3px rgba(160,120,48,0.15); }
+#password-gate .gate-btn { width: 100%; padding: 14px; font-size: 16px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #5a7040, #7a9858); border: none; border-radius: 10px; cursor: pointer; font-family: 'Georgia', serif; margin-top: 12px; }
+#password-gate .gate-error { color: #991b1b; font-size: 13px; margin-top: 10px; display: none; }
+#app-content { display: none; }
 .container { max-width: 640px; margin: 0 auto; padding: 48px 0 64px; }
 .title-area { text-align: center; margin-bottom: 40px; }
 .title-area .label { display: inline-block; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: #a07830; margin-bottom: 12px; font-family: Tahoma, Geneva, sans-serif; }
@@ -79,6 +89,20 @@ input[type="range"] { width: 100%; accent-color: #a07830; margin-top: 10px; }
 </style>
 </head>
 <body>
+<!-- Password Gate -->
+<div id="password-gate">
+  <div class="gate-box">
+    <div class="gate-icon">📜</div>
+    <h2>Siddur Processor</h2>
+    <div class="gate-sub">Enter the password to access this tool.</div>
+    <input type="password" id="gatePassword" placeholder="Password" autocomplete="off">
+    <button class="gate-btn" id="gateSubmit">Enter</button>
+    <div class="gate-error" id="gateError">Incorrect password. Please try again.</div>
+  </div>
+</div>
+
+<!-- App Content (hidden until authenticated) -->
+<div id="app-content">
 <div class="container">
   <div class="title-area">
     <div class="label">Siddur Processor</div>
@@ -200,6 +224,42 @@ input[type="range"] { width: 100%; accent-color: #a07830; margin-top: 10px; }
     <div><span class="num">5.</span> A Word document is generated with named paragraph styles and collected footnotes.</div>
   </div>
 </div>
+</div><!-- end #app-content -->
+
+<!-- Password Gate Script -->
+<script>
+(function() {
+  async function sha256(str) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Precomputed SHA-256 hash of the password
+  const EXPECTED = "e52963a79040e974591680899c4596959797453cd76487eaea4135aebf6a4569";
+
+  // Check session
+  if (sessionStorage.getItem("siddur_auth") === "1") {
+    document.getElementById("password-gate").style.display = "none";
+    document.getElementById("app-content").style.display = "block";
+  }
+
+  document.getElementById("gateSubmit").addEventListener("click", tryLogin);
+  document.getElementById("gatePassword").addEventListener("keydown", function(e) { if (e.key === "Enter") tryLogin(); });
+
+  async function tryLogin() {
+    const pw = document.getElementById("gatePassword").value;
+    const hash = await sha256(pw);
+    if (hash === EXPECTED) {
+      sessionStorage.setItem("siddur_auth", "1");
+      document.getElementById("password-gate").style.display = "none";
+      document.getElementById("app-content").style.display = "block";
+    } else {
+      document.getElementById("gateError").style.display = "block";
+      document.getElementById("gatePassword").value = "";
+      document.getElementById("gatePassword").focus();
+    }
+  }
+})();
+</script>
 
 <!-- PDF.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
