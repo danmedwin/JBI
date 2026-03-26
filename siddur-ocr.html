@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Siddur Processor — Prayer Book to Word</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { min-height: 100vh; background: linear-gradient(160deg, #f5f0e6 0%, #ebe4d4 50%, #e0d8c4 100%); font-family: 'Georgia', 'Palatino Linotype', serif; padding: 0 16px; }
+.container { max-width: 640px; margin: 0 auto; padding: 48px 0 64px; }
+.title-area { text-align: center; margin-bottom: 40px; }
+.title-area .label { display: inline-block; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: #a07830; margin-bottom: 12px; font-family: Tahoma, Geneva, sans-serif; }
+.title-area h1 { font-size: 32px; font-weight: 400; color: #2a2518; line-height: 1.3; }
+.title-area p { color: #7a7060; font-size: 15px; margin-top: 8px; line-height: 1.6; }
+.card { background: rgba(200,164,78,0.08); border-radius: 12px; padding: 16px 20px; margin: 16px 0; }
+.card-alt { background: rgba(58,53,40,0.04); border-radius: 12px; padding: 16px 20px; margin: 16px 0; }
+.card-title { font-size: 14px; font-weight: 700; color: #2a2518; margin-bottom: 10px; }
+.card-sub { font-size: 12px; color: #8a8070; margin-top: 2px; }
+.drop-zone { border: 2px dashed #3a3528; border-radius: 16px; padding: 48px 32px; text-align: center; cursor: pointer; background: rgba(58,53,40,0.04); transition: all 0.3s ease; }
+.drop-zone.dragover { border-color: #c8a44e; background: rgba(200,164,78,0.08); }
+.drop-zone.disabled { opacity: 0.5; cursor: not-allowed; }
+.drop-zone .icon { font-size: 48px; margin-bottom: 12px; }
+.drop-zone .main-text { font-size: 18px; font-weight: 600; color: #2a2518; margin-bottom: 8px; }
+.drop-zone .sub-text { font-size: 14px; color: #7a7060; }
+input[type="file"] { display: none; }
+.file-info { margin-top: 12px; font-size: 13px; color: #5a5040; display: flex; align-items: center; gap: 8px; }
+.file-info .size { color: #a09080; }
+.page-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; margin: 16px 0; }
+.page-thumbs img { height: 100px; border-radius: 6px; border: 1px solid #d8d0c0; flex-shrink: 0; }
+select { width: 100%; padding: 10px 12px; font-size: 15px; border-radius: 8px; border: 1px solid #c8b898; background: #fff; color: #2a2518; font-family: 'Georgia', serif; cursor: pointer; }
+textarea { width: 100%; min-height: 80px; padding: 10px 12px; font-size: 14px; border-radius: 8px; border: 1px solid #c8b898; background: #fff; color: #2a2518; font-family: 'Georgia', serif; resize: vertical; line-height: 1.5; }
+.btn { width: 100%; padding: 16px 24px; font-size: 17px; font-weight: 600; color: #fff; border: none; border-radius: 12px; cursor: pointer; font-family: 'Georgia', serif; letter-spacing: 0.5px; transition: transform 0.15s ease, box-shadow 0.15s ease; margin-top: 8px; }
+.btn:hover { transform: translateY(-1px); }
+.btn-go { background: linear-gradient(135deg, #5a7040, #7a9858); box-shadow: 0 4px 16px rgba(90,112,64,0.3); }
+.btn-go:hover { box-shadow: 0 6px 20px rgba(90,112,64,0.4); }
+.btn-dl { background: linear-gradient(135deg, #a07830, #c8a44e); box-shadow: 0 4px 16px rgba(160,120,48,0.3); }
+.btn-reset { background: none; border: 1px solid #c8b898; border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 12px; color: #7a7060; width: auto; margin-left: auto; }
+.progress-bar { margin: 24px 0; }
+.progress-bar .info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #5a5040; }
+.progress-bar .track { height: 8px; border-radius: 4px; background: #e8e0d0; overflow: hidden; }
+.progress-bar .fill { height: 100%; background: linear-gradient(90deg, #c8a44e, #a07830); border-radius: 4px; transition: width 0.4s ease; }
+.spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #e8e0d0; border-top-color: #a07830; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-box { margin: 20px 0; padding: 16px 20px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 10px; font-size: 14px; }
+.error-box .title { color: #991b1b; font-weight: 600; margin-bottom: 6px; }
+.error-box .msg { color: #7f1d1d; line-height: 1.5; word-break: break-word; }
+.error-box button { margin-top: 12px; background: #991b1b; color: #fff; border: none; border-radius: 6px; padding: 8px 20px; cursor: pointer; font-size: 13px; }
+.debug-panel { margin-top: 8px; padding: 12px 16px; background: #1a1a1a; border-radius: 8px; max-height: 260px; overflow-y: auto; font-size: 11px; font-family: 'Menlo','Monaco','Courier New', monospace; line-height: 1.7; }
+.debug-panel .line { color: #a0d0a0; }
+.debug-panel .line.error { color: #f87171; }
+.debug-panel .line.warn { color: #fbbf24; }
+.debug-panel .line.header { color: #7ab8d4; }
+.detection-box { font-size: 13px; color: #5a5040; margin-bottom: 12px; padding: 8px 12px; background: rgba(200,164,78,0.1); border-radius: 8px; border: 1px solid rgba(200,164,78,0.2); }
+.detection-box .label { font-weight: 600; }
+.detection-box .name { color: #a07830; font-weight: 600; }
+.detection-box .conf { color: #8a8070; margin-left: 8px; }
+.detection-box .reasoning { margin-top: 4px; font-size: 12px; color: #8a8070; font-style: italic; }
+.api-key-input { width: 100%; padding: 10px 12px; font-size: 14px; border-radius: 8px; border: 1px solid #c8b898; background: #fff; color: #2a2518; font-family: 'Menlo', monospace; }
+.font-control { display: flex; align-items: center; justify-content: space-between; }
+.font-control .buttons { display: flex; align-items: center; gap: 8px; }
+.font-control button { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #c8b898; background: #fff; cursor: pointer; font-size: 16px; color: #5a5040; display: flex; align-items: center; justify-content: center; }
+.font-control .value { font-size: 18px; font-weight: 600; color: #2a2518; min-width: 36px; text-align: center; }
+.font-control .unit { font-size: 13px; color: #8a8070; }
+input[type="range"] { width: 100%; accent-color: #a07830; margin-top: 10px; }
+.range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #a09080; margin-top: 2px; }
+.summary-counts { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.summary-counts span { font-size: 13px; color: #5a5040; }
+.skipped-box { margin-top: 12px; padding: 10px 14px; background: #fef7ed; border: 1px solid #f5d0a0; border-radius: 8px; font-size: 13px; }
+.skipped-box .title { color: #7a5020; font-weight: 600; margin-bottom: 4px; }
+.skipped-box .detail { color: #8a6030; }
+.token-row { display: flex; justify-content: space-between; }
+.token-row .val { font-weight: 600; }
+.token-divider { margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(58,53,40,0.1); }
+.token-note { font-size: 11px; color: #a09080; margin-top: 8px; }
+.how-it-works { margin-top: 40px; color: #8a8070; font-size: 13px; line-height: 1.8; }
+.how-it-works .title { font-weight: 700; color: #5a5040; margin-bottom: 8px; }
+.how-it-works .num { color: #a07830; font-weight: 700; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="title-area">
+    <div class="label">Siddur Processor</div>
+    <h1>Prayer Book to Word</h1>
+    <p>Upload a siddur PDF. AI identifies the layout, extracts Hebrew liturgy, transliteration, translation, instructions, footnotes, and page numbers — then exports a formatted Word document.</p>
+  </div>
+
+  <!-- API Key -->
+  <div class="card-alt" id="api-key-section">
+    <div class="card-title">Anthropic API Key</div>
+    <div class="card-sub" style="margin-bottom:10px">Entered once per session. Stored in memory only — never saved or transmitted anywhere except Anthropic's API.</div>
+    <input type="password" class="api-key-input" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off">
+  </div>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📜</div>
+    <div class="main-text">Drop your Siddur PDF here</div>
+    <div class="sub-text">or click to browse</div>
+  </div>
+  <input type="file" id="fileInput" accept=".pdf">
+
+  <!-- File Info -->
+  <div class="file-info hidden" id="fileInfo">
+    <span id="fileName"></span>
+    <span class="size" id="fileSize"></span>
+    <button class="btn-reset hidden" id="resetBtn">Start over</button>
+  </div>
+
+  <!-- Page Thumbs -->
+  <div class="hidden" id="thumbSection">
+    <div style="font-size:13px;color:#7a7060;margin-bottom:8px;font-weight:600" id="thumbLabel"></div>
+    <div class="page-thumbs" id="thumbs"></div>
+  </div>
+
+  <!-- Detecting Spinner -->
+  <div class="hidden" id="detectingArea" style="margin:24px 0;text-align:center">
+    <div style="font-size:14px;color:#5a5040;margin-bottom:8px" id="detectingText"></div>
+    <div class="spinner"></div>
+    <div style="font-size:12px;color:#a09080;margin-top:8px" id="detectingElapsed"></div>
+  </div>
+
+  <!-- Layout Selector -->
+  <div class="card hidden" id="layoutSection">
+    <div class="card-title">Siddur Layout</div>
+    <div class="detection-box hidden" id="detectionBox">
+      <span class="label">Auto-detected: </span><span class="name" id="detectedName"></span>
+      <span class="conf" id="detectedConf"></span>
+      <div class="reasoning hidden" id="detectedReason"></div>
+    </div>
+    <select id="layoutSelect">
+      <option value="mishkan_tfilah">Mishkan T'filah (CCAR Press)</option>
+      <option value="kol_haneshamah">Kol Haneshamah (Reconstructionist Press)</option>
+      <option value="other">Other / Unknown</option>
+    </select>
+    <div style="font-size:12px;color:#8a8070;margin-top:6px" id="layoutDesc"></div>
+  </div>
+
+  <!-- Font Size -->
+  <div class="card-alt hidden" id="fontSection">
+    <div class="font-control">
+      <div><div class="card-title" style="margin-bottom:0">Output Font Size</div><div class="card-sub">Main text size in Word document</div></div>
+      <div class="buttons">
+        <button id="fontDown">−</button>
+        <span class="value" id="fontValue">22</span>
+        <button id="fontUp">+</button>
+        <span class="unit">pt</span>
+      </div>
+    </div>
+    <input type="range" id="fontRange" min="10" max="48" value="22">
+    <div class="range-labels"><span>10pt</span><span>22pt (default)</span><span>48pt</span></div>
+  </div>
+
+  <!-- Processing Notes -->
+  <div class="card-alt hidden" id="notesSection">
+    <div class="card-title">Processing Notes</div>
+    <div style="font-size:12px;color:#8a8070;margin-bottom:10px">Optional: Add notes or special instructions to guide the AI analysis.</div>
+    <textarea id="notesInput" placeholder="Any special notes for processing this PDF..."></textarea>
+  </div>
+
+  <!-- Token Estimate -->
+  <div class="card hidden" id="tokenSection"></div>
+
+  <!-- Begin Button -->
+  <button class="btn btn-go hidden" id="beginBtn">▶ Begin Processing</button>
+
+  <!-- Progress -->
+  <div class="progress-bar hidden" id="progressSection">
+    <div class="info"><span id="progressText"></span><span id="progressCount"></span></div>
+    <div class="track"><div class="fill" id="progressFill"></div></div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-box hidden" id="errorBox">
+    <div class="title">Error</div>
+    <div class="msg" id="errorMsg"></div>
+    <button id="errorResetBtn">Try Again</button>
+  </div>
+
+  <!-- Results -->
+  <div class="hidden" id="resultsSection">
+    <div class="card" id="resultsSummary"></div>
+    <button class="btn btn-dl" id="downloadBtn">⬇ Download Word Document</button>
+  </div>
+
+  <!-- Debug Log -->
+  <div class="hidden" id="debugSection" style="margin-top:24px">
+    <button class="btn-reset" id="debugToggle" style="margin-left:0">Show Debug Log (<span id="debugCount">0</span>)</button>
+    <div class="debug-panel hidden" id="debugPanel"></div>
+  </div>
+
+  <!-- How It Works -->
+  <div class="how-it-works" id="howItWorks">
+    <div class="title">How it works</div>
+    <div><span class="num">1.</span> Upload a siddur PDF — pages are rendered as high-resolution images.</div>
+    <div><span class="num">2.</span> AI auto-detects the siddur layout (you can override).</div>
+    <div><span class="num">3.</span> Adjust font size, add notes, then hit <strong>Begin Processing</strong>.</div>
+    <div><span class="num">4.</span> Each page is analyzed: Hebrew with nikkud, transliteration, translation, and more.</div>
+    <div><span class="num">5.</span> A Word document is generated with named paragraph styles and collected footnotes.</div>
+  </div>
+</div>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+</script>
+
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════
+   LAYOUT DEFINITIONS
+   ═══════════════════════════════════════════ */
+
+const LAYOUTS = {
+  mishkan_tfilah: {
+    name: "Mishkan T'filah",
+    publisher: "CCAR Press",
+    description: "Reform movement siddur with Hebrew, transliteration, and translation in parallel columns",
+    systemPrompt: `You are an expert OCR and layout analysis system specialized in Jewish prayer books (siddurim). You will be given an image of a page from Mishkan T'filah, the Reform movement's siddur published by CCAR Press. Your job is to identify every layout element on the page and extract the text with high accuracy.
+
+CRITICAL: Pay extreme attention to Hebrew vowels (nikkud) — the dots, dashes, and marks above/below Hebrew letters. These MUST be captured accurately.
+
+CRITICAL: Do NOT introduce stray characters, numbers, or artifacts into the extracted text. If you see a digit, punctuation mark, or character that does not clearly belong to the Hebrew word or phrase, omit it. Navigation and header elements in particular should contain ONLY the actual Hebrew or English text visible — no extra digits, no stray "1"s or other artifacts from page numbering, footnote markers, or OCR noise. Double-check every element for phantom characters before returning it.
+
+ITALIC PRESERVATION: When English text (translations, footnotes, instructions, or readings) contains words or phrases in italics, wrap the italic portions in <i>...</i> tags. For example: "We praise You, <i>Adonai</i>, who sanctifies Shabbat." This applies to translations, footnotes, and any English text — but NOT to Hebrew liturgy or transliteration. Instructions are entirely italic by nature — no <i> tags needed for them.
+
+Mishkan T'filah has a distinctive layout:
+- Hebrew liturgy appears RIGHT-ALIGNED on the RIGHT side of each page
+- Transliteration (phonetic English rendering of Hebrew) appears LEFT-ALIGNED on the LEFT side
+- These two columns run in parallel
+- English translation/reading text typically appears BELOW the Hebrew/transliteration columns, centered or left-aligned
+- Section headers are in ALL CAPS and CENTERED on the page
+- Instructions are italicized, centered, and NOT in all caps
+- Margin navigation words appear in Hebrew on the outer margins
+- Page numbers appear in the lower corners, often formatted like "2 [120]"
+- Footnotes appear below a horizontal rule/line near the bottom of the page
+
+Identify and classify each element as one of these types:
+
+- navigation: Hebrew words on the margin (1-2 words per line). Capture ONLY the Hebrew word(s).
+- header: Running header text at the very top of the page. Capture ONLY the actual text — no stray numbers.
+- page_number: Numbers in the lower corner, formatted like "2 [120]".
+- instructions: Centered, italicized text giving directions. NOT in all caps. Entirely italic — no <i> tags needed.
+- section_header: Centered text in ALL CAPS. MUST be CENTERED — left-aligned all-caps is transliteration.
+- hebrew_liturgy: Hebrew text, right-aligned. Join all lines into one paragraph. Preserve all vowel marks.
+- transliteration: Phonetic English of Hebrew, left-aligned. Join into one paragraph. The opening words may be in ALL CAPS — capture them as seen; post-processing will normalize.
+- translation: English meaning/reading. Use <i>...</i> around italic portions. Preserve multi-paragraph breaks as blank lines. New readings starting with ALL CAPS words should be separate elements. The opening words may be in ALL CAPS — capture them as seen.
+- footnote: Text BELOW a horizontal rule at the bottom. Use <i>...</i> around italic portions.
+
+NOTE: A chatimah (closing blessing formula) often appears as a single line of Hebrew + transliteration after an English section (e.g., BARUCH ATAH ADONAI...). Treat the Hebrew as hebrew_liturgy and the transliteration as transliteration — capture the ALL CAPS opening as-is.
+
+Return using XML tags:
+
+<elements>
+<element type="page_number" order="1">2 [120]</element>
+<element type="section_header" order="2">KIDDUSH FOR EVENING OF SHABBAT</element>
+<element type="hebrew_liturgy" order="3">hebrew with all nikkud</element>
+<element type="transliteration" order="4">transliteration here</element>
+<element type="translation" order="5">We praise You, <i>Adonai</i>, Sovereign of the universe.</element>
+<element type="footnote" order="6"><i>Kiddush</i> means "sanctification."</element>
+</elements>
+
+CRITICAL ORDERING RULE: Liturgical content must follow: hebrew_liturgy → transliteration → translation. When multiple sections appear on one page, each independently follows this order.
+
+Return ONLY the XML block. No other text.`
+  },
+  kol_haneshamah: {
+    name: "Kol Haneshamah",
+    publisher: "Reconstructionist Press",
+    description: "Reconstructionist siddur with block Hebrew text, transliteration, and bottom-of-page section/service labels",
+    systemPrompt: `You are an expert OCR and layout analysis system specialized in Jewish prayer books (siddurim). You will be given an image of a page from Kol Haneshamah, the Reconstructionist movement's siddur.
+
+YOUR #1 PRIORITY: Hebrew vowel marks (nikkud) MUST be preserved with 100% fidelity. Every dot, dash, and mark above or below Hebrew letters must appear. Outputting Hebrew without nikkud is a critical failure.
+
+CRITICAL: Do NOT introduce stray characters, numbers, or artifacts.
+
+ITALIC PRESERVATION: When English text contains italic words or phrases, wrap them in <i>...</i> tags. Not for Hebrew or transliteration. Instructions are entirely italic — no tags needed.
+
+TWO-COLUMN HEBREW MERGE — THIS IS CRITICAL:
+Kol Haneshamah often prints Hebrew in TWO SIDE-BY-SIDE COLUMNS that form ONE continuous line of text. The RIGHT column is the START of each line and the LEFT column is the CONTINUATION. You MUST merge them into a single line by concatenating: [right-column text] + [space] + [left-column text]. Do NOT treat the columns as separate paragraphs or separate elements.
+
+Example of what you see on the page:
+  RIGHT COLUMN              LEFT COLUMN
+  כִּי־אַתָּה תָאִיר נֵרִי יהוה    אֱלֹהַי יַגִּיהַּ חָשְׁכִּי:
+  נֵר יהוה נִשְׁמַת אָדָם          חֹפֵשׂ כָּל־חַדְרֵי־בָטֶן:
+
+What you MUST output (merged):
+  כִּי־אַתָּה תָאִיר נֵרִי יהוה אֱלֹהַי יַגִּיהַּ חָשְׁכִּי:
+  נֵר יהוה נִשְׁמַת אָדָם חֹפֵשׂ כָּל־חַדְרֵי־בָטֶן:
+
+Each merged line should be joined into ONE paragraph of hebrew_liturgy. If multiple verses appear in the two-column block, join ALL merged lines into one continuous hebrew_liturgy element, separated by spaces (the sof-pasuq ׃ or colon : already marks verse boundaries).
+
+Kol Haneshamah layout:
+- Running header at top of page, usually formatted "SECTION NAME / PAGE_NUMBER" (e.g., "MEDITATIONS / 9", "ROSH HASHANAH MA'ARIV / 63", "SOURCES / 1257"). SPLIT this into a section_header (the name) and a page_number (the number). The page number goes at the BOTTOM. If the header has no slash/number, treat it as a section_header only.
+- Hebrew text often in two columns — ALWAYS MERGE as described above
+- Transliteration below/near Hebrew, usually shorter. Capture exactly as seen.
+- English translation/reading may appear
+- Instructions in italics
+- Bottom of page: LEFT-ALIGNED text = SECTION NAME; RIGHT-ALIGNED text = SERVICE NAME
+- Footnotes below horizontal rule
+
+Element types:
+- page_number: Page number — either from the running header "SECTION / NUMBER" or from the bottom of the page. Extract ONLY the number.
+- section_header: Section name from the running header at top. Extract ONLY the name part, without the page number. ALL CAPS.
+- bottom_section_name: Left-aligned text at bottom = prayer name.
+- bottom_service_name: Right-aligned text at bottom = service name.
+- instructions: Italicized directions. Entirely italic — no <i> tags.
+- hebrew_liturgy: Hebrew WITH ALL NIKKUD. Two-column text MUST be merged into continuous lines as described above. Join all lines of a block into one element.
+- transliteration: Phonetic English. Capture exactly as seen.
+- translation: English meaning. Use <i>...</i> for italics. Preserve paragraph breaks.
+- footnote: Text below horizontal rule. Use <i>...</i> for italic portions.
+
+Return using XML:
+<elements>
+<element type="section_header" order="1">MEDITATIONS</element>
+<element type="hebrew_liturgy" order="2">בָּרוּךְ אַתָּה (ALL nikkud, two-column merged)</element>
+<element type="transliteration" order="3">transliteration</element>
+<element type="translation" order="4">English with <i>italic</i> words</element>
+<element type="bottom_section_name" order="5">Amidah</element>
+<element type="bottom_service_name" order="6">Kabbalat Shabbat</element>
+<element type="page_number" order="7">9</element>
+</elements>
+
+ORDERING: section_header first, then hebrew_liturgy → transliteration → translation, page_number LAST.
+
+FINAL REMINDER: (1) Hebrew nikkud MUST be present. (2) Two-column Hebrew MUST be merged into continuous lines, not kept as separate columns. Double-check both before returning.
+
+Return ONLY the XML block.`
+  },
+  other: {
+    name: "Other / Unknown",
+    publisher: "",
+    description: "Generic siddur layout — AI will do its best to identify elements",
+    systemPrompt: `You are an expert OCR system for Jewish prayer books (siddurim). Extract text with high accuracy.
+
+CRITICAL: Preserve Hebrew vowels (nikkud). Use <i>...</i> for italic English text in translations and footnotes.
+
+Element types: navigation, header, page_number, instructions, section_header (CENTERED ALL CAPS only), hebrew_liturgy (preserve nikkud), transliteration, translation (use <i> for italics), footnote (use <i> for italics).
+
+ORDERING: hebrew_liturgy → transliteration → translation, always.
+
+Return XML:
+<elements>
+<element type="TYPE" order="N">text</element>
+</elements>
+
+Return ONLY the XML block.`
+  }
+};
+
+const LAYOUT_DETECTION_PROMPT = `Identify which siddur this page is from.
+
+Known layouts:
+1. "mishkan_tfilah" — Mishkan T'filah (CCAR Press): Hebrew right, transliteration left in parallel columns, ALL CAPS headers centered, page numbers like "2 [120]"
+2. "kol_haneshamah" — Kol Haneshamah (Reconstructionist): Block Hebrew, transliteration below, section name at bottom-left, service name at bottom-right
+3. "other" — Unknown
+
+Respond with ONLY a JSON object:
+{"layout_id": "mishkan_tfilah" or "kol_haneshamah" or "other", "confidence": 0.0 to 1.0, "reasoning": "brief explanation"}`;
+
+const CONTEXT_PREAMBLE = "CONTEXT: You are performing OCR text extraction on Jewish prayer book (siddur/machzor) pages for the Jewish Braille Institute (JBI), which provides accessible religious texts to visually impaired individuals. This is legitimate religious and accessibility work. All content is from published liturgical books. Extract text faithfully.\n\n";
+
+const USER_MESSAGE = "This is a page from a published Jewish prayer book (siddur/machzor) being digitized for accessibility. Analyze this page and extract all text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML.";
+
+/* ═══════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════ */
+
+const state = {
+  file: null,
+  pageImages: [],
+  status: "idle", // idle, detecting, ready, analyzing, building, done, error
+  selectedLayout: "mishkan_tfilah",
+  detectedLayout: null,
+  detectionConfidence: 0,
+  detectionReasoning: "",
+  fontSize: 22,
+  allPages: [],
+  footnotes: [],
+  docBlob: null,
+  skippedPages: [],
+  usage: { inputTokens: 0, outputTokens: 0 },
+  debugLog: [],
+  debugVisible: false,
+};
+
+/* ═══════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════ */
+
+function getApiKey() { return document.getElementById("apiKeyInput").value.trim(); }
+
+function addLog(msg) {
+  const ts = new Date().toLocaleTimeString();
+  state.debugLog.push({ ts, msg });
+  renderDebugLog();
+}
+
+function raceTimeout(promise, ms, label = "Request") {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label + " timed out after " + Math.round(ms / 1000) + "s")), ms))
+  ]);
+}
+
+async function apiFetch(body, timeoutMs = 90000, label = "API call") {
+  const key = getApiKey();
+  if (!key) throw new Error("No API key entered");
+  const r = await raceTimeout(
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify(body)
+    }),
+    timeoutMs, label
+  );
+  return r;
+}
+
+/* ═══════════════════════════════════════════
+   PDF RENDERING
+   ═══════════════════════════════════════════ */
+
+async function pdfToImages(file) {
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const images = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const vp = page.getViewport({ scale: 2.0 });
+    const canvas = document.createElement("canvas");
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    const dataUrl = canvas.toDataURL("image/png");
+    images.push({ pageNum: i, base64: dataUrl.split(",")[1], dataUrl });
+  }
+  return { images, totalPages: pdf.numPages };
+}
+
+/* ═══════════════════════════════════════════
+   TEXT / XML PROCESSING
+   ═══════════════════════════════════════════ */
+
+const LITURGICAL_ORDER = { hebrew_liturgy: 0, transliteration: 1, translation: 2 };
+const LITURGICAL_TYPES = new Set(["hebrew_liturgy", "transliteration", "translation"]);
+
+function reorderElements(elements) {
+  const result = []; let buf = [];
+  function flush() {
+    if (!buf.length) return;
+    const groups = []; let cur = [];
+    for (const el of buf) {
+      if (el.type === "hebrew_liturgy" && cur.some(e => e.type === "hebrew_liturgy")) { groups.push(cur); cur = [el]; }
+      else cur.push(el);
+    }
+    if (cur.length) groups.push(cur);
+    for (const g of groups) { g.sort((a, b) => (LITURGICAL_ORDER[a.type] ?? 99) - (LITURGICAL_ORDER[b.type] ?? 99)); for (const el of g) result.push(el); }
+    buf = [];
+  }
+  for (const el of elements) { if (LITURGICAL_TYPES.has(el.type)) buf.push(el); else { flush(); result.push(el); } }
+  flush(); return result;
+}
+
+function stripLatinDiacritics(t) { return t.replace(/[\u0304\u0306\u0307\u0323\u0330\u0331\u0332]/g, ""); }
+
+function parseItalicSpans(raw) {
+  const spans = []; const re = /<i>([\s\S]*?)<\/i>/g; let last = 0, m;
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) spans.push({ text: raw.slice(last, m.index), italic: false });
+    spans.push({ text: m[1], italic: true }); last = re.lastIndex;
+  }
+  if (last < raw.length) spans.push({ text: raw.slice(last), italic: false });
+  if (!spans.length) spans.push({ text: raw, italic: false });
+  return spans;
+}
+
+function parseElementsXml(text, layoutId) {
+  const match = text.match(/<elements>([\s\S]*?)<\/elements>/);
+  if (!match) throw new Error("No <elements> block found");
+  const els = []; const re = /<element\s+type="([^"]+)"\s+order="(\d+)">([\s\S]*?)<\/element>/g; let m;
+  while ((m = re.exec(match[1])) !== null) {
+    let t = m[3].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim();
+    if (m[1] === "transliteration" && layoutId === "kol_haneshamah") t = stripLatinDiacritics(t);
+    els.push({ type: m[1], order: parseInt(m[2], 10), text: t });
+  }
+  if (!els.length) throw new Error("No elements parsed");
+  els.sort((a, b) => a.order - b.order);
+  return { elements: reorderElements(els) };
+}
+
+/* ═══════════════════════════════════════════
+   KOL HANESHAMAH POST-PROCESSING
+   ═══════════════════════════════════════════ */
+
+function postProcessKolHaneshamah(pages) {
+  const seenS = new Set(), seenV = new Set();
+  for (const p of pages) {
+    if (p.skipped) continue;
+    const els = p.elements || [], hdrs = [];
+    for (let i = els.length - 1; i >= 0; i--) {
+      const el = els[i], t = (el.text || "").trim();
+      const slashMatch = t.match(/^(.+?)\s*\/\s*(\d+)$/);
+      if (slashMatch && (el.type === "section_header" || el.type === "page_number" || el.type === "header")) {
+        els[i] = { type: "section_header", text: slashMatch[1].trim(), order: el.order };
+        els.push({ type: "page_number", text: slashMatch[2].trim(), order: 9999 });
+        p.pageNumber = slashMatch[2].trim();
+      }
+    }
+    if (p.pageNumber) {
+      const pnMatch = (p.pageNumber + "").match(/^.+?\/\s*(\d+)$/);
+      if (pnMatch) p.pageNumber = pnMatch[1].trim();
+    }
+    for (let i = els.length - 1; i >= 0; i--) {
+      if (els[i].type === "bottom_section_name" && els[i].text.trim()) { const n = els[i].text.trim(); if (!seenS.has(n)) { seenS.add(n); hdrs.push({ type: "section_header", text: n, order: -2 }); } els.splice(i, 1); }
+      else if (els[i].type === "bottom_service_name" && els[i].text.trim()) { const n = els[i].text.trim(); if (!seenV.has(n)) { seenV.add(n); hdrs.push({ type: "section_header", text: n, order: -1 }); } els.splice(i, 1); }
+    }
+    hdrs.sort((a, b) => a.order - b.order);
+    for (let h = hdrs.length - 1; h >= 0; h--) els.unshift(hdrs[h]);
+    p.elements = els;
+  }
+  return pages;
+}
+
+/* ═══════════════════════════════════════════
+   AI CALLS
+   ═══════════════════════════════════════════ */
+
+async function detectLayout(base64Image) {
+  const fallback = (reason) => { addLog("Detection fallback: " + reason); return { layout_id: "other", confidence: 0, reasoning: reason, usage: null }; };
+  try {
+    addLog("Sending detection request…");
+    const r = await apiFetch({
+      model: "claude-sonnet-4-20250514", max_tokens: 300,
+      system: "You are analyzing pages from published Jewish prayer books (siddurim/machzorim) being digitized for accessibility by the Jewish Braille Institute. This is legitimate religious and accessibility work.",
+      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } }, { type: "text", text: LAYOUT_DETECTION_PROMPT }] }]
+    }, 45000, "Layout detection");
+    addLog("Detection HTTP " + r.status);
+    if (!r.ok) return fallback("API error (HTTP " + r.status + ")");
+    const data = await raceTimeout(r.json(), 15000, "Detection JSON");
+    const text = (data.content || []).map(c => c.text || "").join("");
+    const parsed = JSON.parse(text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim());
+    addLog("Detected: " + parsed.layout_id + " (" + Math.round((parsed.confidence || 0) * 100) + "%)");
+    return { ...parsed, usage: data.usage || null };
+  } catch (err) { return fallback(err.message || "Unknown error"); }
+}
+
+function isContentFilterError(b) { return typeof b === "string" && b.includes("content filtering policy"); }
+function isRateLimitError(s, b) { return s === 429 || (typeof b === "string" && b.includes("rate_limit")); }
+
+async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt, maxAttempts) {
+  attempt = attempt || 1; maxAttempts = maxAttempts || 3;
+  let response;
+  try {
+    addLog("Page fetch attempt " + attempt + "/" + maxAttempts + "…");
+    response = await apiFetch({
+      model: "claude-sonnet-4-20250514", max_tokens: 4096, system: systemPrompt,
+      messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } }, { type: "text", text: USER_MESSAGE }] }]
+    }, 120000, "Page analysis");
+    addLog("Page HTTP " + response.status);
+  } catch (err) {
+    addLog("Page fetch error: " + err.message + (attempt < maxAttempts ? " — retrying…" : ""));
+    if (attempt < maxAttempts) { await new Promise(r => setTimeout(r, 2000 * attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt + 1, maxAttempts); }
+    throw new Error("Network/timeout error: " + err.message);
+  }
+  if (!response.ok) {
+    const body = await raceTimeout(response.text(), 15000, "Error body").catch(() => "unknown");
+    addLog("Page API error: HTTP " + response.status + " — " + body.slice(0, 120));
+    if (response.status === 400 && isContentFilterError(body)) { if (attempt < maxAttempts) { await new Promise(r => setTimeout(r, 2000 * attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt + 1, maxAttempts); } throw new Error("CONTENT_FILTER: Blocked after " + attempt + " attempts."); }
+    if (isRateLimitError(response.status, body)) { if (attempt < maxAttempts) { addLog("Rate limited — waiting…"); await new Promise(r => setTimeout(r, 5000 * attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt + 1, maxAttempts); } throw new Error("RATE_LIMIT: Exceeded after " + attempt + " attempts."); }
+    if (response.status >= 500 && attempt < maxAttempts) { await new Promise(r => setTimeout(r, 3000 * attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt + 1, maxAttempts); }
+    throw new Error("API HTTP " + response.status + ": " + body);
+  }
+  addLog("Parsing response JSON…");
+  const data = await raceTimeout(response.json(), 90000, "JSON body read");
+  addLog("JSON parsed OK");
+  if (data.error) throw new Error("API error: " + (data.error.message || JSON.stringify(data.error)));
+  const text = (data.content || []).map(c => c.text || "").join("");
+  addLog("Response: " + text.length + " chars. Parsing XML…");
+  try {
+    const parsed = parseElementsXml(text, layoutId);
+    addLog("Parsed " + parsed.elements.length + " elements");
+    return { ...parsed, usage: data.usage || null };
+  } catch (parseErr) {
+    addLog("XML parse error: " + parseErr.message + (attempt < maxAttempts ? " — retrying…" : ""));
+    if (attempt < maxAttempts) { await new Promise(r => setTimeout(r, 1000)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt + 1, maxAttempts); }
+    throw new Error("Parse failed after " + attempt + " attempts: " + parseErr.message);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DOCX BUILDER
+   ═══════════════════════════════════════════ */
+
+let docxLoaded = false;
+async function loadDocxLib() {
+  if (docxLoaded) return;
+  for (const url of ["https://unpkg.com/docx@8.2.2/build/index.umd.js", "https://cdn.jsdelivr.net/npm/docx@8.2.2/build/index.umd.js"]) {
+    try { await new Promise((ok, no) => { const s = document.createElement("script"); s.src = url; s.onload = ok; s.onerror = () => no(); document.head.appendChild(s); }); if (window.docx) { docxLoaded = true; return; } } catch (_) {}
+  }
+  throw new Error("Failed to load docx.js");
+}
+
+function startsWithAllCaps(t) { return /^([A-Z]{2,})(\s|,|;|:|\.|\!)/.test(t); }
+
+function normalizeLeadingCaps(text) {
+  if (!startsWithAllCaps(text)) return text;
+  const words = text.split(/(\s+)/);
+  let wordCount = 0, cutoff = 0;
+  for (let i = 0; i < words.length; i++) {
+    if (/\S/.test(words[i])) { wordCount++; if (wordCount === 3) { cutoff = i + 1; break; } }
+    else cutoff = i + 1;
+  }
+  if (cutoff === 0) cutoff = words.length;
+  const head = words.slice(0, cutoff).map(w => /\S/.test(w) ? w.toUpperCase() : w).join("");
+  const tail = words.slice(cutoff).map(w => {
+    if (/\S/.test(w) && /^[A-Z]{2,}[,;:.\-!?]?$/.test(w)) return w.charAt(0) + w.slice(1).toLowerCase();
+    return w;
+  }).join("");
+  return head + tail;
+}
+
+function makeTextRuns(text, font, size, extra) {
+  extra = extra || {};
+  const { TextRun } = window.docx;
+  return parseItalicSpans(text).map(s => new TextRun({ text: s.text, font, size, ...extra, ...(s.italic ? { italics: true } : {}) }));
+}
+
+function buildDocx(allPages, footnotes, fontSize) {
+  const { Document, Paragraph, TextRun, AlignmentType, PageBreak, BorderStyle } = window.docx;
+  const T = "Tahoma", ms = fontSize * 2, is = Math.round((fontSize - 1) * 2), fs = Math.round((fontSize - 2) * 2), hs = Math.round((fontSize + 2) * 2), p12 = 240;
+  const ch = [];
+
+  for (let pi = 0; pi < allPages.length; pi++) {
+    const pg = allPages[pi];
+    if (pg.skipped) { ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400, after: 200 }, children: [new TextRun({ text: "[Page " + pg.sourcePageIndex + " skipped: " + (pg.skipReason || "error") + "]", font: T, size: is, italics: true, color: "996633" })] })); if (pi < allPages.length - 1) ch.push(new Paragraph({ children: [new PageBreak()] })); continue; }
+    let ei = 0;
+    for (const el of pg.elements || []) {
+      if (["navigation", "header", "footnote", "page_number", "bottom_section_name", "bottom_service_name"].includes(el.type)) { ei++; continue; }
+      if (el.type === "section_header") ch.push(new Paragraph({ style: "SectionHeader", spacing: { before: 480, after: 200 }, children: [new TextRun({ text: el.text, font: T, size: ms, bold: true })] }));
+      else if (el.type === "hebrew_liturgy") ch.push(new Paragraph({ style: "HebrewLiturgy", alignment: AlignmentType.RIGHT, children: [new TextRun({ text: el.text, font: T, size: ms, rightToLeft: true })] }));
+      else if (el.type === "transliteration") { const nt = normalizeLeadingCaps(el.text); ch.push(new Paragraph({ style: "Transliteration", spacing: { after: 240 }, children: [new TextRun({ text: nt, font: T, size: ms })] })); }
+      else if (el.type === "translation") {
+        for (const [ti, raw] of el.text.split(/\n\s*\n/).entries()) {
+          let pt = raw.replace(/\n/g, " ").trim(); if (!pt) continue;
+          pt = normalizeLeadingCaps(pt);
+          const nr = startsWithAllCaps(pt), fp = (ei === 0 && ti === 0);
+          const sb = (nr && !fp) ? p12 * 2 + 240 : (ti > 0) ? 200 : p12;
+          ch.push(new Paragraph({ style: "Translation", spacing: { before: sb, after: 120 }, children: makeTextRuns(pt, T, ms) }));
+        }
+      } else if (el.type === "instructions") {
+        const hasItalicTags = /<i>/.test(el.text);
+        if (hasItalicTags) ch.push(new Paragraph({ style: "Instructions", spacing: { before: p12, after: p12 }, children: makeTextRuns(el.text, T, is) }));
+        else ch.push(new Paragraph({ style: "Instructions", spacing: { before: p12, after: p12 }, children: [new TextRun({ text: el.text, font: T, size: is, italics: true })] }));
+      }
+      ei++;
+    }
+    if (pg.pageNumber) ch.push(new Paragraph({ style: "PageNumber", children: [new TextRun({ text: pg.pageNumber, font: T, size: ms })] }));
+    if (pi < allPages.length - 1) ch.push(new Paragraph({ children: [new PageBreak()] }));
+  }
+
+  if (footnotes.length) {
+    ch.push(new Paragraph({ children: [new PageBreak()] }));
+    ch.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 300 }, children: [new TextRun({ text: "Footnotes", font: T, size: hs, bold: true })] }));
+    ch.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999" } }, spacing: { after: 200 }, children: [] }));
+    const gr = {}; for (const fn of footnotes) { if (!gr[fn.sourcePage]) gr[fn.sourcePage] = []; gr[fn.sourcePage].push(fn.text); }
+    for (const [pg, txts] of Object.entries(gr)) {
+      ch.push(new Paragraph({ spacing: { after: 0 }, children: [] }));
+      ch.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 200, after: 120 }, children: [new TextRun({ text: "Page " + pg, font: T, size: is, bold: true, color: "555555" })] }));
+      for (const txt of txts) for (const fp of txt.split(/\n\s*\n/)) { const t = fp.replace(/\n/g, " ").trim(); if (t) ch.push(new Paragraph({ spacing: { after: 120 }, children: makeTextRuns(t, T, fs) })); }
+    }
+  }
+
+  return new Document({
+    styles: { paragraphStyles: [
+      { id: "PageNumber", name: "Page Number", basedOn: "Normal", run: { font: T, size: ms }, paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 400, after: 200 } } },
+      { id: "SectionHeader", name: "Section Header", basedOn: "Normal", run: { font: T, size: ms, bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { before: 480, after: 200 } } },
+      { id: "Instructions", name: "Instructions", basedOn: "Normal", run: { font: T, size: is, italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { before: p12, after: p12 } } },
+      { id: "HebrewLiturgy", name: "Hebrew Liturgy", basedOn: "Normal", run: { font: T, size: ms, rightToLeft: true }, paragraph: { alignment: AlignmentType.RIGHT, spacing: { after: 120 } } },
+      { id: "Transliteration", name: "Transliteration", basedOn: "Normal", run: { font: T, size: ms }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120 } } },
+      { id: "Translation", name: "Translation", basedOn: "Normal", run: { font: T, size: ms }, paragraph: { alignment: AlignmentType.LEFT, spacing: { before: p12, after: 120 } } },
+    ] },
+    sections: [{ properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: ch }]
+  });
+}
+
+/* ═══════════════════════════════════════════
+   UI RENDERING
+   ═══════════════════════════════════════════ */
+
+const $ = id => document.getElementById(id);
+function show(id) { $(id).classList.remove("hidden"); }
+function hide(id) { $(id).classList.add("hidden"); }
+
+function renderDebugLog() {
+  $("debugCount").textContent = state.debugLog.length;
+  if (state.debugLog.length > 0) show("debugSection");
+  const panel = $("debugPanel");
+  panel.innerHTML = state.debugLog.map(({ ts, msg }) => {
+    let cls = "line";
+    if (msg.includes("ERROR") || msg.includes("SKIPPED")) cls += " error";
+    else if (msg.includes("fallback") || msg.includes("retrying")) cls += " warn";
+    else if (msg.includes("──")) cls += " header";
+    return `<div class="${cls}">${ts} — ${msg}</div>`;
+  }).join("");
+  panel.scrollTop = panel.scrollHeight;
+  // Auto-show during processing
+  if (["detecting", "analyzing", "building"].includes(state.status)) panel.classList.remove("hidden");
+}
+
+function renderTokenEstimate() {
+  const n = state.pageImages.length;
+  if (!n) { hide("tokenSection"); return; }
+  show("tokenSection");
+  const fmtT = n => n >= 1000 ? (n / 1000).toFixed(1) + "K" : String(n);
+  const fmtC = n => "$" + n.toFixed(4);
+  const INPUT_RATE = 3, OUTPUT_RATE = 15;
+
+  if (state.status === "done" && state.usage.inputTokens > 0) {
+    const ic = (state.usage.inputTokens / 1e6) * INPUT_RATE;
+    const oc = (state.usage.outputTokens / 1e6) * OUTPUT_RATE;
+    $("tokenSection").innerHTML = `<div class="card-title">Actual Token Usage</div>
+      <div style="font-size:13px;color:#5a5040;line-height:1.8">
+        <div class="token-row"><span>Input tokens</span><span class="val">${fmtT(state.usage.inputTokens)}</span></div>
+        <div class="token-row"><span>Output tokens</span><span class="val">${fmtT(state.usage.outputTokens)}</span></div>
+        <div class="token-row token-divider"><span style="font-weight:600">Total cost</span><span style="font-weight:700;color:#a07830">${fmtC(ic + oc)}</span></div>
+      </div>
+      <div class="token-note">Based on $3/MTok input, $15/MTok output (Claude Sonnet 4).</div>`;
+    return;
+  }
+
+  const sysT = state.selectedLayout === "mishkan_tfilah" ? 2400 : state.selectedLayout === "kol_haneshamah" ? 2200 : 1500;
+  const perPage = sysT + 2500 + 50;
+  const totalIn = 2900 + (perPage * n);
+  const loOut = 100 + (500 * n), hiOut = 100 + (2000 * n);
+  const inCost = (totalIn / 1e6) * INPUT_RATE;
+  const loCost = inCost + (loOut / 1e6) * OUTPUT_RATE;
+  const hiCost = inCost + (hiOut / 1e6) * OUTPUT_RATE;
+
+  $("tokenSection").innerHTML = `<div class="card-title">Estimated Token Usage</div>
+    <div style="font-size:13px;color:#5a5040;line-height:1.8">
+      <div class="token-row"><span>${n} page${n !== 1 ? "s" : ""} + layout detection</span><span style="color:#8a8070">Claude Sonnet 4</span></div>
+      <div class="token-row"><span>Input tokens (est.)</span><span class="val">${fmtT(totalIn)}</span></div>
+      <div class="token-row"><span>Output tokens (est.)</span><span class="val">${fmtT(loOut)}–${fmtT(hiOut)}</span></div>
+      <div class="token-row token-divider"><span style="font-weight:600">Estimated cost</span><span style="font-weight:700;color:#a07830">${fmtC(loCost)} – ${fmtC(hiCost)}</span></div>
+    </div>
+    <div class="token-note">Based on $3/MTok input, $15/MTok output. Actual usage may vary.</div>`;
+}
+
+function renderResults() {
+  if (!state.allPages.length) return;
+  const c = {};
+  for (const p of state.allPages) { if (p.skipped) continue; for (const e of p.elements || []) c[e.type] = (c[e.type] || 0) + 1; }
+  const L = { hebrew_liturgy: "Hebrew Liturgy", transliteration: "Transliteration", translation: "Translation", section_header: "Section Headers", instructions: "Instructions", page_number: "Page Numbers", footnote: "Footnotes", navigation: "Navigation (skipped)", header: "Headers (skipped)" };
+  let html = `<div class="card-title">Elements Identified</div>`;
+  html += `<div style="font-size:12px;color:#8a8070;margin-bottom:8px">Layout: ${LAYOUTS[state.selectedLayout]?.name || state.selectedLayout}</div>`;
+  html += `<div class="summary-counts">${Object.entries(c).map(([t, n]) => `<span>${L[t] || t}: <strong>${n}</strong></span>`).join("")}</div>`;
+  if (state.skippedPages.length) {
+    html += `<div class="skipped-box"><div class="title">⚠ ${state.skippedPages.length} page${state.skippedPages.length > 1 ? "s" : ""} skipped</div>
+      <div class="detail">${state.skippedPages.map(s => "Page " + s.sourcePageIndex).join(", ")} — could not be processed.</div></div>`;
+  }
+  $("resultsSummary").innerHTML = html;
+  show("resultsSection");
+}
+
+/* ═══════════════════════════════════════════
+   MAIN WORKFLOWS
+   ═══════════════════════════════════════════ */
+
+async function handleFile(file) {
+  state.file = file;
+  state.pageImages = [];
+  state.allPages = [];
+  state.footnotes = [];
+  state.docBlob = null;
+  state.skippedPages = [];
+  state.detectedLayout = null;
+  state.detectionConfidence = 0;
+  state.detectionReasoning = "";
+  state.usage = { inputTokens: 0, outputTokens: 0 };
+  state.debugLog = [];
+  state.status = "detecting";
+
+  hide("errorBox"); hide("resultsSection"); hide("howItWorks");
+  $("fileName").textContent = "📄 " + file.name;
+  $("fileSize").textContent = "(" + (file.size / 1024 / 1024).toFixed(1) + " MB)";
+  show("fileInfo"); hide("resetBtn");
+
+  show("detectingArea");
+  $("detectingText").textContent = "Rendering PDF and detecting layout…";
+  let detectStart = Date.now();
+  const elapsedTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - detectStart) / 1000);
+    $("detectingElapsed").textContent = s + "s elapsed";
+  }, 1000);
+
+  try {
+    addLog("Rendering PDF pages…");
+    const { images, totalPages } = await pdfToImages(file);
+    addLog("PDF rendered: " + totalPages + " pages");
+    state.pageImages = images;
+
+    // Show thumbnails
+    $("thumbLabel").textContent = "Pages (" + images.length + ")";
+    $("thumbs").innerHTML = images.map((p, i) => `<img src="${p.dataUrl}" alt="Page ${p.pageNum}">`).join("");
+    show("thumbSection");
+
+    // Detect layout
+    $("detectingText").textContent = "Identifying siddur layout…";
+    detectStart = Date.now();
+    addLog("Starting layout detection…");
+
+    if (!getApiKey()) {
+      addLog("No API key — skipping detection");
+      state.detectedLayout = null;
+      state.selectedLayout = "kol_haneshamah";
+    } else {
+      const det = await detectLayout(images[0].base64);
+      const detId = det.layout_id && LAYOUTS[det.layout_id] ? det.layout_id : "other";
+      state.detectedLayout = detId;
+      state.detectionConfidence = det.confidence || 0;
+      state.detectionReasoning = det.reasoning || "";
+      state.selectedLayout = detId;
+      if (det.usage) {
+        state.usage.inputTokens += det.usage.input_tokens || 0;
+        state.usage.outputTokens += det.usage.output_tokens || 0;
+      }
+    }
+
+    clearInterval(elapsedTimer);
+    hide("detectingArea");
+
+    // Show layout selector
+    if (state.detectedLayout) {
+      $("detectedName").textContent = LAYOUTS[state.detectedLayout]?.name || state.detectedLayout;
+      $("detectedConf").textContent = "(" + Math.round(state.detectionConfidence * 100) + "%)";
+      if (state.detectionReasoning) { $("detectedReason").textContent = state.detectionReasoning; show("detectedReason"); }
+      show("detectionBox");
+    }
+    $("layoutSelect").value = state.selectedLayout;
+    $("layoutDesc").textContent = LAYOUTS[state.selectedLayout]?.description || "";
+    show("layoutSection");
+    show("fontSection");
+    show("notesSection");
+    show("beginBtn");
+    show("resetBtn");
+
+    state.status = "ready";
+    addLog("Ready.");
+    renderTokenEstimate();
+
+  } catch (err) {
+    clearInterval(elapsedTimer);
+    hide("detectingArea");
+    showError(err.message);
+  }
+}
+
+async function beginProcessing() {
+  if (!state.file || !state.pageImages.length) return;
+  if (!getApiKey()) { showError("Please enter your Anthropic API key."); return; }
+
+  state.status = "analyzing";
+  state.allPages = [];
+  state.footnotes = [];
+  state.docBlob = null;
+  state.skippedPages = [];
+  hide("errorBox"); hide("resultsSection"); hide("beginBtn");
+
+  const layout = LAYOUTS[state.selectedLayout] || LAYOUTS.other;
+  let sysPrompt = CONTEXT_PREAMBLE + layout.systemPrompt;
+  const notes = $("notesInput").value.trim();
+  if (notes) sysPrompt += "\n\nADDITIONAL NOTES FROM THE USER:\n" + notes;
+
+  addLog("Beginning: " + state.pageImages.length + " pages, layout: " + state.selectedLayout);
+
+  const total = state.pageImages.length;
+  const pages = [], allFn = [], skipped = [];
+
+  show("progressSection");
+
+  for (let i = 0; i < state.pageImages.length; i++) {
+    $("progressText").textContent = "Analyzing page " + (i + 1) + " of " + total + "…";
+    $("progressCount").textContent = (i) + "/" + total + " pages";
+    $("progressFill").style.width = ((i / total) * 100) + "%";
+    addLog("── Page " + (i + 1) + "/" + total + " ──");
+
+    try {
+      const result = await analyzePageWithClaude(state.pageImages[i].base64, sysPrompt, state.selectedLayout);
+      const els = result.elements || [];
+      const pnEl = els.find(e => e.type === "page_number");
+      const pn = pnEl ? pnEl.text : String(i + 1);
+      for (const fn of els.filter(e => e.type === "footnote")) allFn.push({ sourcePage: pn, text: fn.text });
+      pages.push({ pageNumber: pn, elements: els, sourcePageIndex: i + 1 });
+      addLog("Page " + (i + 1) + " done: " + els.length + " elements, pageNum=" + pn);
+      if (result.usage) {
+        state.usage.inputTokens += result.usage.input_tokens || 0;
+        state.usage.outputTokens += result.usage.output_tokens || 0;
+      }
+    } catch (pageErr) {
+      let sr = "processing error";
+      if (pageErr.message.startsWith("CONTENT_FILTER:")) sr = "content filter";
+      else if (pageErr.message.startsWith("RATE_LIMIT:")) sr = "rate limit";
+      addLog("Page " + (i + 1) + " SKIPPED: " + sr + " — " + pageErr.message);
+      const sp = { sourcePageIndex: i + 1, skipped: true, skipReason: sr, pageNumber: String(i + 1), elements: [] };
+      pages.push(sp); skipped.push(sp);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
+  $("progressFill").style.width = "100%";
+  $("progressText").textContent = "Generating Word document…";
+  $("progressCount").textContent = total + "/" + total + " pages";
+  state.status = "building";
+  addLog("Building Word document…");
+
+  try {
+    let proc = pages;
+    if (state.selectedLayout === "kol_haneshamah") proc = postProcessKolHaneshamah(pages);
+    state.allPages = proc;
+    state.footnotes = allFn;
+    state.skippedPages = skipped;
+
+    await loadDocxLib();
+    const Pk = window.docx.Packer || window.docx.default?.Packer;
+    state.docBlob = await Pk.toBlob(buildDocx(proc, allFn, state.fontSize));
+
+    state.status = "done";
+    hide("progressSection");
+    show("resetBtn");
+    renderResults();
+    renderTokenEstimate();
+    addLog("Done! " + pages.length + " pages processed, " + skipped.length + " skipped.");
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function downloadDocx() {
+  if (!state.docBlob) return;
+  const u = URL.createObjectURL(state.docBlob);
+  const a = document.createElement("a");
+  a.href = u;
+  a.download = (state.file ? state.file.name.replace(/\.pdf$/i, "") : "siddur") + "_processed.docx";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(u); }, 1000);
+}
+
+function showError(msg) {
+  state.status = "error";
+  $("errorMsg").textContent = msg;
+  show("errorBox");
+  hide("progressSection");
+  addLog("ERROR: " + msg);
+}
+
+function resetAll() {
+  state.file = null;
+  state.pageImages = [];
+  state.status = "idle";
+  state.allPages = [];
+  state.footnotes = [];
+  state.docBlob = null;
+  state.skippedPages = [];
+  state.detectedLayout = null;
+  state.detectionConfidence = 0;
+  state.detectionReasoning = "";
+  state.fontSize = 22;
+  state.usage = { inputTokens: 0, outputTokens: 0 };
+  state.debugLog = [];
+  state.debugVisible = false;
+
+  hide("fileInfo"); hide("thumbSection"); hide("detectingArea"); hide("layoutSection");
+  hide("fontSection"); hide("notesSection"); hide("tokenSection"); hide("beginBtn");
+  hide("progressSection"); hide("errorBox"); hide("resultsSection"); hide("debugSection");
+  hide("detectionBox"); hide("detectedReason");
+  show("howItWorks");
+  $("debugPanel").classList.add("hidden");
+  $("fontValue").textContent = "22";
+  $("fontRange").value = 22;
+  $("notesInput").value = "";
+  $("layoutSelect").value = "mishkan_tfilah";
+  $("fileInput").value = "";
+}
+
+/* ═══════════════════════════════════════════
+   EVENT LISTENERS
+   ═══════════════════════════════════════════ */
+
+const dropZone = $("dropZone");
+const fileInput = $("fileInput");
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("dragover");
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === "application/pdf") handleFile(f);
+});
+dropZone.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", e => { const f = e.target.files[0]; if (f) handleFile(f); });
+
+$("beginBtn").addEventListener("click", beginProcessing);
+$("downloadBtn").addEventListener("click", downloadDocx);
+$("resetBtn").addEventListener("click", resetAll);
+$("errorResetBtn").addEventListener("click", resetAll);
+
+$("layoutSelect").addEventListener("change", e => {
+  state.selectedLayout = e.target.value;
+  $("layoutDesc").textContent = LAYOUTS[state.selectedLayout]?.description || "";
+  renderTokenEstimate();
+});
+
+$("fontDown").addEventListener("click", () => { state.fontSize = Math.max(10, state.fontSize - 1); $("fontValue").textContent = state.fontSize; $("fontRange").value = state.fontSize; });
+$("fontUp").addEventListener("click", () => { state.fontSize = Math.min(48, state.fontSize + 1); $("fontValue").textContent = state.fontSize; $("fontRange").value = state.fontSize; });
+$("fontRange").addEventListener("input", e => { state.fontSize = parseInt(e.target.value, 10); $("fontValue").textContent = state.fontSize; });
+
+$("debugToggle").addEventListener("click", () => {
+  state.debugVisible = !state.debugVisible;
+  $("debugPanel").classList.toggle("hidden", !state.debugVisible);
+  $("debugToggle").textContent = (state.debugVisible ? "Hide" : "Show") + " Debug Log (" + state.debugLog.length + ")";
+});
+
+</script>
+</body>
+</html>
