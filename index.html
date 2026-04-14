@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Siddur OCR Project — JBI</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --gold: #a07830;
+    --gold-light: #c8a44e;
+    --parchment: #f5f0e6;
+    --parchment-dark: #e0d8c4;
+    --ink: #2a2518;
+    --ink-soft: #5a5040;
+    --ink-muted: #8a8070;
+    --green: #5a7040;
+    --green-light: #7a9858;
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--parchment);
+    color: var(--ink);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .hero {
+    text-align: center;
+    padding: 80px 24px 48px;
+    background: linear-gradient(180deg, #ebe4d4 0%, var(--parchment) 100%);
+    border-bottom: 1px solid rgba(160,120,48,0.12);
+  }
+
+  .hero-badge {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+    margin-bottom: 16px;
+    padding: 6px 16px;
+    border: 1px solid rgba(160,120,48,0.2);
+    border-radius: 20px;
+    background: rgba(160,120,48,0.04);
+  }
+
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(36px, 5vw, 52px);
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 16px;
+    line-height: 1.15;
+  }
+
+  .hero p {
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  .hero-hebrew {
+    font-size: 20px;
+    color: var(--gold);
+    margin: 20px 0 0;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+    margin-bottom: 24px;
+  }
+
+  /* ── Tool Cards ── */
+  .cards { display: grid; gap: 20px; margin-bottom: 56px; }
+
+  .card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 28px 28px 24px;
+    background: #fff;
+    border: 1px solid rgba(160,120,48,0.1);
+    border-radius: 16px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(42,37,24,0.08);
+    border-color: rgba(160,120,48,0.25);
+  }
+
+  .card-number {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 48px;
+    font-weight: 700;
+    color: rgba(160,120,48,0.07);
+    line-height: 1;
+  }
+
+  .card-title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+
+  .card-desc {
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.65;
+    margin-bottom: 14px;
+  }
+
+  .card-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+  }
+
+  .tag-web { background: rgba(90,112,64,0.1); color: var(--green); }
+  .tag-python { background: rgba(160,120,48,0.1); color: var(--gold); }
+  .tag-doc { background: rgba(42,37,24,0.06); color: var(--ink-muted); }
+  .tag-arrow { margin-left: 4px; font-size: 13px; }
+
+  /* ── Workflow ── */
+  .workflow {
+    margin-bottom: 56px;
+  }
+
+  .step {
+    display: flex;
+    gap: 20px;
+    padding: 20px 0;
+    border-bottom: 1px solid rgba(160,120,48,0.08);
+  }
+
+  .step:last-child { border-bottom: none; }
+
+  .step-num {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px;
+    font-weight: 700;
+    background: rgba(160,120,48,0.08);
+    color: var(--gold);
+  }
+
+  .step-content h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .step-content p {
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+
+  .step-content code {
+    font-size: 12px;
+    background: rgba(42,37,24,0.05);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Supported layouts ── */
+  .layouts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 56px;
+  }
+
+  @media (max-width: 560px) { .layouts { grid-template-columns: 1fr; } }
+
+  .layout-card {
+    padding: 20px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(160,120,48,0.08);
+    border-radius: 12px;
+  }
+
+  .layout-card h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .layout-card p {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 32px 24px;
+    color: var(--ink-muted);
+    font-size: 13px;
+    border-top: 1px solid rgba(160,120,48,0.08);
+  }
+
+  .footer a { color: var(--gold); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">Jewish Braille Institute</div>
+  <h1>Siddur OCR Project</h1>
+  <p>AI-powered tools for converting printed prayer books into accessible, large-print Word documents — preserving Hebrew with nikkud, transliteration, translation, and page structure.</p>
+  <div class="hero-hebrew">סִדּוּר → דוקס</div>
+</div>
+
+<div class="container">
+
+  <div class="section-label">Tools</div>
+  <div class="cards">
+    <a class="card" href="siddur-ocr.html">
+      <div class="card-number">1</div>
+      <div class="card-title">Siddur OCR Processor</div>
+      <div class="card-desc">Upload a siddur PDF and let Claude's vision AI extract Hebrew liturgy, transliteration, translation, instructions, and footnotes into a formatted Word document. Requires an Anthropic API key.</div>
+      <span class="card-tag tag-web">Web App<span class="tag-arrow">→</span></span>
+    </a>
+
+    <a class="card" href="siddur_page_numberer.py">
+      <div class="card-number">2</div>
+      <div class="card-title">Page Numberer Script</div>
+      <div class="card-desc">Python post-processor that adds accurate lettered page numbers (e.g., "42a", "42b") to the Word output. Uses LibreOffice to detect actual page breaks. Run it via Claude chat — just upload the .docx and the script.</div>
+      <span class="card-tag tag-python">Python Script<span class="tag-arrow">↓</span></span>
+    </a>
+
+    <a class="card" href="Siddur-OCR-Project-Report.md">
+      <div class="card-number">3</div>
+      <div class="card-title">Project Report</div>
+      <div class="card-desc">Complete technical documentation: supported layouts, element types, output format, algorithms, version history, known issues, and architecture notes for continuing development.</div>
+      <span class="card-tag tag-doc">Documentation<span class="tag-arrow">↓</span></span>
+    </a>
+  </div>
+
+  <div class="section-label">Workflow</div>
+  <div class="workflow">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Process PDF with the OCR app</h3>
+        <p>Open <a href="siddur-ocr.html" style="color:var(--green)">Siddur OCR Processor</a>, enter your API key, upload a siddur PDF, and click <strong>Begin Processing</strong>. Download the generated <code>.docx</code> file.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Add page numbers via Claude</h3>
+        <p>Open <a href="https://claude.ai" style="color:var(--green)" target="_blank">claude.ai</a>, upload the <code>.docx</code> from step 1 and <a href="siddur_page_numberer.py" style="color:var(--green)">siddur_page_numberer.py</a>, then ask: <em>"Run the page numberer on this document."</em> Claude will execute the script and return the numbered file.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>Review and adjust</h3>
+        <p>Open the numbered document in Word or Google Docs. Check page number placement — occasionally a break may land a sentence too early or late. You can ask Claude to adjust specific page numbers if needed.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Supported Layouts</div>
+  <div class="layouts">
+    <div class="layout-card">
+      <h3>Mishkan T'filah</h3>
+      <p>CCAR Press / Reform movement. Parallel columns: Hebrew right, transliteration left. ALL CAPS section headers, dual page numbers (e.g., "2 [120]").</p>
+    </div>
+    <div class="layout-card">
+      <h3>Kol Haneshamah</h3>
+      <p>Reconstructionist Press. Block Hebrew, running headers, author attributions, responsive readings, divine names in small caps, bottom section labels.</p>
+    </div>
+  </div>
+
+  <div class="section-label">Requirements</div>
+  <div class="workflow">
+    <div class="step">
+      <div class="step-num">①</div>
+      <div class="step-content">
+        <h3>OCR Processor</h3>
+        <p>Any modern browser + an <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--gold)">Anthropic API key</a>. Typical cost: ~$0.10–$0.30 per page (Claude Sonnet vision).</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">②</div>
+      <div class="step-content">
+        <h3>Page Numberer</h3>
+        <p>A <a href="https://claude.ai" target="_blank" style="color:var(--gold)">Claude</a> account (free or Pro). The script runs directly inside Claude's environment — no local Python or LibreOffice installation needed.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Built for the <a href="https://jbilibrary.org" target="_blank">Jewish Braille Institute</a> · Powered by <a href="https://anthropic.com" target="_blank">Anthropic Claude</a>
+</div>
+
+</body>
+</html>

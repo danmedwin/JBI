@@ -1,21 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Siddur OCR Processor</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Georgia, 'Palatino Linotype', serif; }
-  #root { min-height: 100vh; }
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-<script type="text/babel">
+import { useState, useCallback, useRef, useEffect } from "react";
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
 const VERSION_STAMP = (() => {
@@ -291,7 +274,7 @@ function parseElementsXml(text, layoutId) {
 
 async function detectLayout(base64Image) {
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": window._siddurApiKey || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } }, { type: "text", text: LAYOUT_DETECTION_PROMPT }] }] }),
     });
@@ -309,7 +292,7 @@ function isRateLimitError(s, b) { return s === 429 || (typeof b === "string" && 
 async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 3) {
   let response;
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": window._siddurApiKey || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4096, system: systemPrompt,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } },
           { type: "text", text: "Analyze this siddur page. Extract text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML." }] }] }),
@@ -574,8 +557,8 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
 
 /* ─── UI Components ─── */
 function FileUploadZone({ onFile, disabled }) {
-  const [dragOver, setDragOver] = React.useState(false);
-  const inputRef = React.useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef(null);
   return (
     <div onDragOver={e=>{e.preventDefault();if(!disabled)setDragOver(true)}} onDragLeave={()=>setDragOver(false)}
       onDrop={e=>{e.preventDefault();setDragOver(false);if(disabled)return;const f=e.dataTransfer.files[0];if(f&&f.type==="application/pdf")onFile(f)}}
@@ -721,23 +704,21 @@ function ResultsSummary({allPages,layoutName,skippedPages}) {
 }
 
 /* ─── Main App ─── */
-function SiddurOCRApp() {
-  const [apiKey,setApiKey]=React.useState(localStorage.getItem("siddur_api_key")||"");
-  React.useEffect(()=>{window._siddurApiKey=apiKey;localStorage.setItem("siddur_api_key",apiKey);},[apiKey]);
-  const [file,setFile]=React.useState(null), [status,setStatus]=React.useState("idle"), [pageImages,setPageImages]=React.useState([]);
-  const [progress,setProgress]=React.useState({current:0,total:0}), [statusText,setStatusText]=React.useState("");
-  const [allPages,setAllPages]=React.useState([]), [footnotes,setFootnotes]=React.useState([]), [docBlob,setDocBlob]=React.useState(null);
-  const [error,setError]=React.useState(null), [skippedPages,setSkippedPages]=React.useState([]);
-  const [selectedLayout,setSelectedLayout]=React.useState("mishkan_tfilah");
-  const [detectedLayout,setDetectedLayout]=React.useState(null), [detectionConfidence,setDetectionConfidence]=React.useState(0), [detectionReasoning,setDetectionReasoning]=React.useState("");
-  const [fontSize,setFontSize]=React.useState(22), [processingNotes,setProcessingNotes]=React.useState("");
-  const [actualUsage,setActualUsage]=React.useState({inputTokens:0,outputTokens:0});
-  const [autoStartCount,setAutoStartCount]=React.useState(-1);
-  const [timerCancelled,setTimerCancelled]=React.useState(false);
-  const timerRef=React.useRef(null);
+export default function SiddurOCRApp() {
+  const [file,setFile]=useState(null), [status,setStatus]=useState("idle"), [pageImages,setPageImages]=useState([]);
+  const [progress,setProgress]=useState({current:0,total:0}), [statusText,setStatusText]=useState("");
+  const [allPages,setAllPages]=useState([]), [footnotes,setFootnotes]=useState([]), [docBlob,setDocBlob]=useState(null);
+  const [error,setError]=useState(null), [skippedPages,setSkippedPages]=useState([]);
+  const [selectedLayout,setSelectedLayout]=useState("mishkan_tfilah");
+  const [detectedLayout,setDetectedLayout]=useState(null), [detectionConfidence,setDetectionConfidence]=useState(0), [detectionReasoning,setDetectionReasoning]=useState("");
+  const [fontSize,setFontSize]=useState(22), [processingNotes,setProcessingNotes]=useState("");
+  const [actualUsage,setActualUsage]=useState({inputTokens:0,outputTokens:0});
+  const [autoStartCount,setAutoStartCount]=useState(-1);
+  const [timerCancelled,setTimerCancelled]=useState(false);
+  const timerRef=useRef(null);
 
   /* Auto-start countdown: begins when status becomes "ready" */
-  React.useEffect(()=>{
+  useEffect(()=>{
     if (status==="ready" && !timerCancelled) {
       setAutoStartCount(30);
       timerRef.current=setInterval(()=>{
@@ -753,7 +734,7 @@ function SiddurOCRApp() {
     }
   },[status,timerCancelled]);
 
-  const handleFile = React.useCallback(async (pdfFile) => {
+  const handleFile = useCallback(async (pdfFile) => {
     setFile(pdfFile); setError(null); setDocBlob(null); setAllPages([]); setFootnotes([]);
     setPageImages([]); setSkippedPages([]); setDetectedLayout(null); setDetectionConfidence(0); setDetectionReasoning("");
     setActualUsage({inputTokens:0,outputTokens:0});
@@ -784,7 +765,7 @@ function SiddurOCRApp() {
     } catch(err) { setError(err.message); setStatus("error"); }
   },[]);
 
-  const beginProcessing = React.useCallback(async () => {
+  const beginProcessing = useCallback(async () => {
     if (!file || !pageImages.length) return;
     setError(null); setDocBlob(null); setAllPages([]); setFootnotes([]); setSkippedPages([]);
     // Keep detection usage, reset page usage
@@ -844,7 +825,7 @@ function SiddurOCRApp() {
     } catch(err) { setError(err.message); setStatus("error"); }
   },[file,pageImages,selectedLayout,fontSize,processingNotes]);
 
-  const downloadDocx = React.useCallback(()=>{
+  const downloadDocx = useCallback(()=>{
     if (!docBlob) return;
     const u=URL.createObjectURL(docBlob),a=document.createElement("a");
     a.href=u; a.download=(file?file.name.replace(/\.pdf$/i,""):"siddur")+"_processed.docx";
@@ -853,7 +834,7 @@ function SiddurOCRApp() {
   },[docBlob,file]);
 
   /* Auto-trigger: when countdown hits 0 and status is still ready, start processing */
-  React.useEffect(()=>{
+  useEffect(()=>{
     if (autoStartCount===0 && status==="ready" && !timerCancelled) {
       /* Small delay to ensure state is settled */
       const t=setTimeout(()=>{ if (status==="ready") beginProcessing(); },200);
@@ -883,17 +864,7 @@ function SiddurOCRApp() {
           <p style={{color:"#7a7060",fontSize:15,marginTop:8,lineHeight:1.6}}>Upload a siddur PDF. AI identifies the layout, extracts Hebrew liturgy, transliteration, translation, instructions, footnotes, and page numbers — then exports a formatted Word document.</p>
         </div>
 
-        
-        {/* API Key Input */}
-        <div style={{marginBottom:24,padding:"16px 20px",background:"rgba(200,164,78,0.06)",border:"1px solid rgba(200,164,78,0.15)",borderRadius:12}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#5a5040",marginBottom:8}}>Anthropic API Key</div>
-          <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)}
-            placeholder="sk-ant-api03-..."
-            style={{width:"100%",padding:"10px 14px",fontSize:14,border:"1px solid #d8d0c0",borderRadius:8,background:"#fff",fontFamily:"monospace",boxSizing:"border-box",color:"#2a2518"}} />
-          <div style={{fontSize:11,color:"#a09080",marginTop:6}}>Your key is stored in your browser only and sent directly to the Anthropic API. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style={{color:"#a07830"}}>Get a key →</a></div>
-        </div>
-
-        <FileUploadZone onFile={handleFile} disabled={isProc || !apiKey.trim()} />
+        <FileUploadZone onFile={handleFile} disabled={isProc} />
 
         {file && <div style={{marginTop:12,fontSize:13,color:"#5a5040",display:"flex",alignItems:"center",gap:8}}>
           <span>📄 {file.name}</span><span style={{color:"#a09080"}}>({(file.size/1024/1024).toFixed(1)} MB)</span>
@@ -943,9 +914,6 @@ function SiddurOCRApp() {
         {status==="done"&&allPages.length>0&&<>
           <ResultsSummary allPages={allPages} layoutName={LAYOUTS[selectedLayout]?.name} skippedPages={skippedPages} />
           <button onClick={downloadDocx} style={{width:"100%",padding:"16px 24px",fontSize:17,fontWeight:600,color:"#fff",background:"linear-gradient(135deg,#a07830,#c8a44e)",border:"none",borderRadius:12,cursor:"pointer",marginTop:8,fontFamily:"'Georgia',serif",letterSpacing:0.5,boxShadow:"0 4px 16px rgba(160,120,48,0.3)"}}>⬇ Download Word Document</button>
-          <div style={{marginTop:12,padding:"12px 16px",background:"rgba(90,112,64,0.06)",border:"1px solid rgba(90,112,64,0.15)",borderRadius:10,fontSize:13,color:"#5a5040",lineHeight:1.6}}>
-            <strong>Next step:</strong> Upload the downloaded .docx to a <a href="https://claude.ai" target="_blank" rel="noopener" style={{color:"#5a7040"}}>Claude chat</a> along with <code>siddur_page_numberer.py</code> and ask Claude to run it. This adds accurate lettered page numbers (e.g., 42a, 42b).
-          </div>
         </>}
 
         {status==="idle" && <div style={{marginTop:40,color:"#8a8070",fontSize:13,lineHeight:1.8}}>
@@ -960,9 +928,3 @@ function SiddurOCRApp() {
     </div>
   );
 }
-
-
-ReactDOM.render(React.createElement(SiddurOCRApp), document.getElementById("root"));
-</script>
-</body>
-</html>
