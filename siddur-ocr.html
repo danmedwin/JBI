@@ -940,13 +940,6 @@ function SiddurOCRApp() {
           <p style={{color:"#7a7060",fontSize:15,marginTop:8,lineHeight:1.6}}>Upload a siddur PDF. AI identifies the layout, extracts Hebrew liturgy, transliteration, translation, instructions, footnotes, and page numbers — then exports a formatted Word document.</p>
         </div>
 
-        <div style={{background:"#eae4d4",border:"1px solid #d8d0c0",borderRadius:10,padding:"16px 20px",marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:"#5a5040",marginBottom:4}}>Anthropic API Key</div>
-          <div style={{fontSize:12,color:"#8a8070",marginBottom:8}}>Entered once per session. Stored in memory only.</div>
-          <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..." autoComplete="off"
-            style={{width:"100%",padding:"10px 14px",fontSize:14,border:"1px solid #c8b898",borderRadius:8,background:"#faf8f2",fontFamily:"monospace",color:"#2a2518",outline:"none"}} />
-        </div>
-
         <FileUploadZone onFile={handleFile} disabled={isProc} />
 
         {file && <div style={{marginTop:12,fontSize:13,color:"#5a5040",display:"flex",alignItems:"center",gap:8}}>
