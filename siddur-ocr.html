@@ -1,34 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Siddur OCR Processor</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Georgia, 'Palatino Linotype', serif; }
-  #root { min-height: 100vh; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Siddur OCR — Prayer Book to Word</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f5f0e6; font-family: Georgia, 'Palatino Linotype', serif; }
+    #root { min-height: 100vh; }
+    #api-gate {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(160deg, #f5f0e6 0%, #ebe4d4 50%, #e0d8c4 100%);
+    }
+    .gate-box {
+      text-align: center; padding: 48px 40px;
+      background: rgba(255,255,255,0.5); border-radius: 16px;
+      border: 1px solid #d8d0c0; max-width: 400px; width: 90%;
+    }
+    .gate-box .icon { font-size: 48px; margin-bottom: 16px; }
+    .gate-box h2 { font-size: 20px; font-weight: 400; color: #2a2518; margin-bottom: 8px; }
+    .gate-box p { font-size: 13px; color: #8a8070; margin-bottom: 20px; line-height: 1.5; }
+    .gate-box input {
+      width: 100%; padding: 12px 16px; font-size: 14px;
+      border: 1px solid #c8b898; border-radius: 10px; background: #faf8f2;
+      font-family: monospace; outline: none; color: #2a2518;
+    }
+    .gate-box input:focus { border-color: #a07830; }
+    .gate-box button {
+      margin-top: 12px; width: 100%; padding: 12px; font-size: 15px;
+      background: linear-gradient(135deg, #a07830, #c8a44e); color: #fff;
+      border: none; border-radius: 10px; cursor: pointer; font-family: Georgia, serif;
+    }
+    .gate-error { color: #991b1b; font-size: 13px; margin-top: 10px; display: none; }
+    #app-content { display: none; }
+  </style>
 </head>
 <body>
-<div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-<script type="text/babel">
+
+  <div id="api-gate">
+    <div class="gate-box">
+      <div class="icon">📜</div>
+      <h2>Siddur Processor</h2>
+      <p>Enter your Claude API key to continue.<br>Stored in this browser tab only.</p>
+      <input type="password" id="gate-input" placeholder="sk-ant-..." autocomplete="off">
+      <button id="gate-btn">Enter</button>
+      <div class="gate-error" id="gate-error">Please enter a valid API key (starts with sk-).</div>
+    </div>
+  </div>
+
+  <div id="app-content">
+    <div id="root"></div>
+  </div>
+
+  <script>
+  function checkGate() {
+    var val = document.getElementById("gate-input").value.trim();
+    if (val.startsWith("sk-") && val.length > 10) {
+      sessionStorage.setItem("siddur-api-key", val);
+      showApp();
+    } else {
+      document.getElementById("gate-error").style.display = "block";
+    }
+  }
+  function showApp() {
+    document.getElementById("api-gate").style.display = "none";
+    document.getElementById("app-content").style.display = "block";
+  }
+  if (sessionStorage.getItem("siddur-api-key")) { showApp(); }
+  document.getElementById("gate-btn").addEventListener("click", checkGate);
+  document.getElementById("gate-input").addEventListener("keydown", function(e) { if (e.key === "Enter") checkGate(); });
+  </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+  <script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = (() => {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
-    const now = new Date();
-    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-    const tfmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
-    return "v" + fmt.format(now) + " " + tfmt.format(now);
-  } catch (_) {
-    return "v" + new Date().toISOString().slice(0, 16).replace("T", " ");
-  }
-})();
+const VERSION_STAMP = "v2026-04-28 build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -50,6 +102,7 @@ Mishkan T'filah has a distinctive layout:
 - These two columns run in parallel
 - English translation/reading text typically appears BELOW the Hebrew/transliteration columns, centered or left-aligned
 - Section headers are in ALL CAPS and CENTERED on the page
+- Some section headers have a Hebrew title (e.g., "בִּרְכוֹת הַשַּׁחַר") CENTERED on its own line, paired with the English ALL CAPS section header directly below it (or the transliteration+English combined, like "BIRCHOT HASHACHAR — MORNING BLESSINGS"). The Hebrew title is extracted as hebrew_section_header. This is DIFFERENT from hebrew_liturgy (body Hebrew, right-aligned) — a hebrew_section_header is CENTERED on the page, not right-aligned, and visually pairs with an English section_header.
 - Instructions are italicized, centered, and NOT in all caps
 - Margin navigation words appear in Hebrew on the outer margins
 - Page numbers appear in the lower corners, often formatted like "2 [120]"
@@ -62,6 +115,7 @@ Identify and classify each element as one of these types:
 - page_number: Numbers in the lower corner, formatted like "2 [120]".
 - instructions: Centered, italicized text giving directions. NOT in all caps. Entirely italic — no <i> tags needed.
 - section_header: Centered text in ALL CAPS. MUST be CENTERED — left-aligned all-caps is transliteration.
+- hebrew_section_header: Hebrew prayer/section title CENTERED on the page (not right-aligned). Typically appears directly above an English section_header. Include all nikkud. This is NOT body Hebrew — body Hebrew is right-aligned and becomes hebrew_liturgy. The Hebrew title of a service or major section (e.g., שַׁחֲרִית לְשַׁבָּת, סֵדֶר קְרִיאַת הַתּוֹרָה) is ALWAYS a hebrew_section_header, even when it is the first element on the page.
 - hebrew_liturgy: Hebrew text, right-aligned. Join all lines into one paragraph. Preserve all vowel marks.
 - transliteration: Phonetic English of Hebrew, left-aligned. Join into one paragraph. The opening words may be in ALL CAPS — capture them as seen; post-processing will normalize.
 - translation: English meaning/reading. Use <i>...</i> around italic portions. Preserve multi-paragraph breaks as blank lines. New readings starting with ALL CAPS words should be separate elements. The opening words may be in ALL CAPS — capture them as seen.
@@ -72,18 +126,18 @@ NOTE: A chatimah (closing blessing formula) often appears as a single line of He
 Return using XML tags:
 
 <elements>
-<element type="page_number" order="1">2 [120]</element>
-<element type="section_header" order="2">KIDDUSH FOR EVENING OF SHABBAT</element>
-<element type="hebrew_liturgy" order="3">hebrew with all nikkud</element>
-<element type="transliteration" order="4">transliteration here</element>
-<element type="translation" order="5">We praise You, <i>Adonai</i>, Sovereign of the universe.</element>
-<element type="footnote" order="6"><i>Kiddush</i> means "sanctification."</element>
+<element type="page_number" order="1">68 [186]</element>
+<element type="hebrew_section_header" order="2">בִּרְכוֹת הַשַּׁחַר</element>
+<element type="section_header" order="3">BIRCHOT HASHACHAR — MORNING BLESSINGS</element>
+<element type="hebrew_liturgy" order="4">hebrew with all nikkud</element>
+<element type="transliteration" order="5">transliteration here</element>
+<element type="translation" order="6">We praise You, <i>Adonai</i>, Sovereign of the universe.</element>
+<element type="footnote" order="7"><i>Kiddush</i> means "sanctification."</element>
 </elements>
 
 CRITICAL ORDERING RULE: Liturgical content must follow: hebrew_liturgy → transliteration → translation. When multiple sections appear on one page, each independently follows this order.
 
 Return ONLY the XML block. No other text.`,
-    detectHints: ["mishkan", "ccar", "reform", "transliteration on left", "hebrew on right", "parallel columns"],
   },
   "kol_haneshamah": {
     name: "Kol Haneshamah",
@@ -172,7 +226,6 @@ FINAL SELF-CHECK before returning:
 8. Hebrew nikkud MUST be present. Double-check.
 
 Return ONLY the XML block.`,
-    detectHints: ["kol haneshamah", "reconstructionist", "block hebrew", "bottom section labels"],
   },
   "other": {
     name: "Other / Unknown",
@@ -192,7 +245,6 @@ Return XML:
 </elements>
 
 Return ONLY the XML block.`,
-    detectHints: [],
   },
 };
 
@@ -280,7 +332,7 @@ function parseElementsXml(text, layoutId) {
   while ((m = re.exec(match[1])) !== null) {
     let t = m[3].replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").trim();
     /* Strip arrow characters */
-    t = t.replace(/[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B73\u25B6\u25C0\u27A1\u2B05-\u2B07\u21A9\u21AA\u27F6\u279C\u279E\u27A4\u2192\u2190\u2191\u2193\u2194\u2195\u21D0-\u21D5\u25BA\u25C4]/g, "").trim();
+    t = t.replace(/[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B73\u25B6\u25C0\u25BA\u25C4\u27F6]/g, "").trim();
     if (m[1] === "transliteration" && layoutId === "kol_haneshamah") t = stripLatinDiacritics(t);
     els.push({ type: m[1], order: parseInt(m[2],10), text: t });
   }
@@ -289,9 +341,9 @@ function parseElementsXml(text, layoutId) {
   return { elements: reorderElements(els) };
 }
 
-async function detectLayout(base64Image) {
+async function detectLayout(base64Image, apiKey) {
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": window._siddurApiKey || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } }, { type: "text", text: LAYOUT_DETECTION_PROMPT }] }] }),
     });
@@ -306,23 +358,23 @@ async function detectLayout(base64Image) {
 function isContentFilterError(b) { return typeof b === "string" && b.includes("content filtering policy"); }
 function isRateLimitError(s, b) { return s === 429 || (typeof b === "string" && b.includes("rate_limit")); }
 
-async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 3) {
+async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, apiKey, attempt = 1, maxAttempts = 3) {
   let response;
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": window._siddurApiKey || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4096, system: systemPrompt,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } },
           { type: "text", text: "Analyze this siddur page. Extract text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML." }] }] }),
     });
   } catch (err) {
-    if (attempt < maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt+1, maxAttempts); }
+    if (attempt < maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, apiKey, attempt+1, maxAttempts); }
     throw new Error("Network error: "+err.message);
   }
   if (!response.ok) {
     const body = await response.text().catch(()=>"unknown");
-    if (response.status===400 && isContentFilterError(body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); } let detail=""; try { const j=JSON.parse(body); detail=j.error?.message||""; } catch(_){} throw new Error("CONTENT_FILTER: Blocked after "+attempt+" attempts."+(detail?" Detail: "+detail:"")); }
-    if (isRateLimitError(response.status,body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,5000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); } throw new Error("RATE_LIMIT: Exceeded after "+attempt+" attempts."); }
-    if (response.status>=500 && attempt<maxAttempts) { await new Promise(r=>setTimeout(r,3000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); }
+    if (response.status===400 && isContentFilterError(body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); } let detail=""; try { const j=JSON.parse(body); detail=j.error?.message||""; } catch(_){} throw new Error("CONTENT_FILTER: Blocked after "+attempt+" attempts."+(detail?" Detail: "+detail:"")); }
+    if (isRateLimitError(response.status,body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,5000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); } throw new Error("RATE_LIMIT: Exceeded after "+attempt+" attempts."); }
+    if (response.status>=500 && attempt<maxAttempts) { await new Promise(r=>setTimeout(r,3000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); }
     throw new Error("API HTTP "+response.status+": "+body);
   }
   const data = await response.json();
@@ -332,7 +384,7 @@ async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attemp
     const parsed = parseElementsXml(text, layoutId);
     return { ...parsed, usage: data.usage || null };
   } catch (parseErr) {
-    if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,1000)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); }
+    if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,1000)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); }
     throw new Error("Parse failed after "+attempt+" attempts: "+parseErr.message);
   }
 }
@@ -354,7 +406,7 @@ function cleanHeaderText(t) {
 function postProcessKolHaneshamah(pages) {
   /* Single set for ALL header text — case-insensitive, stripped of punctuation for matching */
   const seenHeaders = new Set();
-  const normalizeHeader = (s) => cleanHeaderText(s).toUpperCase().replace(/['']/g, "'").replace(/\s+/g, " ");
+  const normalizeHeader = (s) => cleanHeaderText(s).toUpperCase().replace(/['’]/g, "'").replace(/\s+/g, " ");
 
   for (const p of pages) {
     if (p.skipped) continue;
@@ -497,7 +549,12 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
         ch.push(new Paragraph({spacing:{before:200,after:200},children:[new TextRun({text:"",font:T,size:Math.round(ms*0.4)})]}));
       }
 
-      if (el.type==="section_header") ch.push(new Paragraph({style:"SectionHeader",spacing:{before:480,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true})]}));
+      if (el.type==="section_header") {
+        /* If directly preceded by a hebrew_section_header, tighten the gap so the two read as one paired heading */
+        const sb = (prevType==="hebrew_section_header") ? 60 : 480;
+        ch.push(new Paragraph({style:"SectionHeader",spacing:{before:sb,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true})]}));
+      }
+      else if (el.type==="hebrew_section_header") ch.push(new Paragraph({style:"HebrewSectionHeader",alignment:AlignmentType.CENTER,spacing:{before:480,after:60},children:[new TextRun({text:el.text,font:T,size:ms,bold:true,rightToLeft:true})]}));
       else if (el.type==="hebrew_header") ch.push(new Paragraph({style:"HebrewHeader",alignment:AlignmentType.RIGHT,spacing:{before:360,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true,rightToLeft:true})]}));
       else if (el.type==="hebrew_liturgy") ch.push(new Paragraph({style:"HebrewLiturgy",alignment:AlignmentType.RIGHT,children:[new TextRun({text:el.text,font:T,size:ms,rightToLeft:true})]}));
       else if (el.type==="transliteration") { const nt=useCapsNorm?normalizeLeadingCaps(el.text):el.text; ch.push(new Paragraph({style:"Transliteration",spacing:{after:240},children:[new TextRun({text:nt,font:T,size:ms})]})); }
@@ -561,6 +618,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
     styles:{paragraphStyles:[
       {id:"PageNumber",name:"Page Number",basedOn:"Normal",run:{font:T,size:ms},paragraph:{alignment:AlignmentType.CENTER,spacing:{before:400,after:200}}},
       {id:"SectionHeader",name:"Section Header",basedOn:"Normal",run:{font:T,size:ms,bold:true},paragraph:{alignment:AlignmentType.CENTER,spacing:{before:480,after:200}}},
+      {id:"HebrewSectionHeader",name:"Hebrew Section Header",basedOn:"Normal",run:{font:T,size:ms,bold:true,rightToLeft:true},paragraph:{alignment:AlignmentType.CENTER,spacing:{before:480,after:60}}},
       {id:"HebrewHeader",name:"Hebrew Header",basedOn:"Normal",run:{font:T,size:ms,bold:true,rightToLeft:true},paragraph:{alignment:AlignmentType.RIGHT,spacing:{before:360,after:200}}},
       {id:"Instructions",name:"Instructions",basedOn:"Normal",run:{font:T,size:is,italics:true},paragraph:{alignment:AlignmentType.LEFT,spacing:{before:p12,after:p12}}},
       {id:"HebrewLiturgy",name:"Hebrew Liturgy",basedOn:"Normal",run:{font:T,size:ms,rightToLeft:true},paragraph:{alignment:AlignmentType.RIGHT,spacing:{after:120}}},
@@ -574,8 +632,8 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
 
 /* ─── UI Components ─── */
 function FileUploadZone({ onFile, disabled }) {
-  const [dragOver, setDragOver] = React.useState(false);
-  const inputRef = React.useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef(null);
   return (
     <div onDragOver={e=>{e.preventDefault();if(!disabled)setDragOver(true)}} onDragLeave={()=>setDragOver(false)}
       onDrop={e=>{e.preventDefault();setDragOver(false);if(disabled)return;const f=e.dataTransfer.files[0];if(f&&f.type==="application/pdf")onFile(f)}}
@@ -706,7 +764,7 @@ function ProgressBar({current,total,status}) {
 
 function ResultsSummary({allPages,layoutName,skippedPages}) {
   const c={}; for (const p of allPages) { if(p.skipped) continue; for (const e of p.elements||[]) c[e.type]=(c[e.type]||0)+1; }
-  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
+  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",hebrew_section_header:"Hebrew Section Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
   return (
     <div style={{background:"rgba(200,164,78,0.08)",borderRadius:12,padding:"16px 20px",margin:"16px 0"}}>
       <div style={{fontSize:14,fontWeight:700,color:"#2a2518",marginBottom:4}}>Elements Identified</div>
@@ -722,22 +780,21 @@ function ResultsSummary({allPages,layoutName,skippedPages}) {
 
 /* ─── Main App ─── */
 function SiddurOCRApp() {
-  const [apiKey,setApiKey]=React.useState(localStorage.getItem("siddur_api_key")||"");
-  React.useEffect(()=>{window._siddurApiKey=apiKey;localStorage.setItem("siddur_api_key",apiKey);},[apiKey]);
-  const [file,setFile]=React.useState(null), [status,setStatus]=React.useState("idle"), [pageImages,setPageImages]=React.useState([]);
-  const [progress,setProgress]=React.useState({current:0,total:0}), [statusText,setStatusText]=React.useState("");
-  const [allPages,setAllPages]=React.useState([]), [footnotes,setFootnotes]=React.useState([]), [docBlob,setDocBlob]=React.useState(null);
-  const [error,setError]=React.useState(null), [skippedPages,setSkippedPages]=React.useState([]);
-  const [selectedLayout,setSelectedLayout]=React.useState("mishkan_tfilah");
-  const [detectedLayout,setDetectedLayout]=React.useState(null), [detectionConfidence,setDetectionConfidence]=React.useState(0), [detectionReasoning,setDetectionReasoning]=React.useState("");
-  const [fontSize,setFontSize]=React.useState(22), [processingNotes,setProcessingNotes]=React.useState("");
-  const [actualUsage,setActualUsage]=React.useState({inputTokens:0,outputTokens:0});
-  const [autoStartCount,setAutoStartCount]=React.useState(-1);
-  const [timerCancelled,setTimerCancelled]=React.useState(false);
-  const timerRef=React.useRef(null);
+  const [file,setFile]=useState(null), [status,setStatus]=useState("idle"), [pageImages,setPageImages]=useState([]);
+  const [progress,setProgress]=useState({current:0,total:0}), [statusText,setStatusText]=useState("");
+  const [allPages,setAllPages]=useState([]), [footnotes,setFootnotes]=useState([]), [docBlob,setDocBlob]=useState(null);
+  const [error,setError]=useState(null), [skippedPages,setSkippedPages]=useState([]);
+  const [selectedLayout,setSelectedLayout]=useState("mishkan_tfilah");
+  const [detectedLayout,setDetectedLayout]=useState(null), [detectionConfidence,setDetectionConfidence]=useState(0), [detectionReasoning,setDetectionReasoning]=useState("");
+  const [fontSize,setFontSize]=useState(22), [processingNotes,setProcessingNotes]=useState("");
+  const [actualUsage,setActualUsage]=useState({inputTokens:0,outputTokens:0});
+  const [autoStartCount,setAutoStartCount]=useState(-1);
+  const [timerCancelled,setTimerCancelled]=useState(false);
+  const [apiKey,setApiKey]=useState("");
+  const timerRef=useRef(null);
 
   /* Auto-start countdown: begins when status becomes "ready" */
-  React.useEffect(()=>{
+  useEffect(()=>{
     if (status==="ready" && !timerCancelled) {
       setAutoStartCount(30);
       timerRef.current=setInterval(()=>{
@@ -753,7 +810,7 @@ function SiddurOCRApp() {
     }
   },[status,timerCancelled]);
 
-  const handleFile = React.useCallback(async (pdfFile) => {
+  const handleFile = useCallback(async (pdfFile) => {
     setFile(pdfFile); setError(null); setDocBlob(null); setAllPages([]); setFootnotes([]);
     setPageImages([]); setSkippedPages([]); setDetectedLayout(null); setDetectionConfidence(0); setDetectionReasoning("");
     setActualUsage({inputTokens:0,outputTokens:0});
@@ -768,7 +825,7 @@ function SiddurOCRApp() {
       let det = { layout_id: "other", confidence: 0, reasoning: "No pages available", usage: null };
       for (let p = 0; p < maxDetectPages; p++) {
         if (p > 0) setStatusText(`Identifying siddur layout (page ${p + 1} of ${maxDetectPages})\u2026`);
-        const attempt = await detectLayout(images[p].base64);
+        const attempt = await detectLayout(images[p].base64, apiKey);
         if (attempt.usage) setActualUsage(prev=>({inputTokens:prev.inputTokens+(attempt.usage.input_tokens||0),outputTokens:prev.outputTokens+(attempt.usage.output_tokens||0)}));
         if (attempt.layout_id && attempt.layout_id !== "other" && LAYOUTS[attempt.layout_id]) {
           det = attempt;
@@ -784,7 +841,7 @@ function SiddurOCRApp() {
     } catch(err) { setError(err.message); setStatus("error"); }
   },[]);
 
-  const beginProcessing = React.useCallback(async () => {
+  const beginProcessing = useCallback(async () => {
     if (!file || !pageImages.length) return;
     setError(null); setDocBlob(null); setAllPages([]); setFootnotes([]); setSkippedPages([]);
     // Keep detection usage, reset page usage
@@ -802,14 +859,14 @@ function SiddurOCRApp() {
         try {
           let result;
           try {
-            result = await analyzePageWithClaude(pageImages[i].base64, sysPrompt, selectedLayout);
+            result = await analyzePageWithClaude(pageImages[i].base64, sysPrompt, selectedLayout, apiKey);
           } catch(firstErr) {
             if (firstErr.message.startsWith("CONTENT_FILTER:")) {
               /* Retry with instructions to skip sensitive content */
               setStatusText("Page "+(i+1)+": content filter hit, retrying with safe mode\u2026");
               const safePrompt = sysPrompt + "\n\nCONTENT SAFETY NOTE: A previous attempt to process this page was blocked by content filters. Please extract all text EXCEPT any content that might be considered sensitive or inappropriate. For any text you must omit, insert a placeholder: [content omitted due to filtering]. Extract everything else normally with full accuracy.";
               try {
-                result = await analyzePageWithClaude(pageImages[i].base64, safePrompt, selectedLayout, 1, 2);
+                result = await analyzePageWithClaude(pageImages[i].base64, safePrompt, selectedLayout, apiKey, 1, 2);
               } catch(_) { throw firstErr; /* safe mode also failed, throw original error */ }
             } else {
               throw firstErr;
@@ -844,7 +901,7 @@ function SiddurOCRApp() {
     } catch(err) { setError(err.message); setStatus("error"); }
   },[file,pageImages,selectedLayout,fontSize,processingNotes]);
 
-  const downloadDocx = React.useCallback(()=>{
+  const downloadDocx = useCallback(()=>{
     if (!docBlob) return;
     const u=URL.createObjectURL(docBlob),a=document.createElement("a");
     a.href=u; a.download=(file?file.name.replace(/\.pdf$/i,""):"siddur")+"_processed.docx";
@@ -853,7 +910,7 @@ function SiddurOCRApp() {
   },[docBlob,file]);
 
   /* Auto-trigger: when countdown hits 0 and status is still ready, start processing */
-  React.useEffect(()=>{
+  useEffect(()=>{
     if (autoStartCount===0 && status==="ready" && !timerCancelled) {
       /* Small delay to ensure state is settled */
       const t=setTimeout(()=>{ if (status==="ready") beginProcessing(); },200);
@@ -871,7 +928,7 @@ function SiddurOCRApp() {
     setTimerCancelled(false);setAutoStartCount(-1);
   };
 
-  const isProc=["converting","analyzing","building","detecting"].includes(status);
+  const isProc=["analyzing","building","detecting"].includes(status);
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#f5f0e6 0%,#ebe4d4 50%,#e0d8c4 100%)",fontFamily:"'Georgia','Palatino Linotype',serif",padding:"0 16px"}}>
@@ -883,17 +940,14 @@ function SiddurOCRApp() {
           <p style={{color:"#7a7060",fontSize:15,marginTop:8,lineHeight:1.6}}>Upload a siddur PDF. AI identifies the layout, extracts Hebrew liturgy, transliteration, translation, instructions, footnotes, and page numbers — then exports a formatted Word document.</p>
         </div>
 
-        
-        {/* API Key Input */}
-        <div style={{marginBottom:24,padding:"16px 20px",background:"rgba(200,164,78,0.06)",border:"1px solid rgba(200,164,78,0.15)",borderRadius:12}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#5a5040",marginBottom:8}}>Anthropic API Key</div>
-          <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)}
-            placeholder="sk-ant-api03-..."
-            style={{width:"100%",padding:"10px 14px",fontSize:14,border:"1px solid #d8d0c0",borderRadius:8,background:"#fff",fontFamily:"monospace",boxSizing:"border-box",color:"#2a2518"}} />
-          <div style={{fontSize:11,color:"#a09080",marginTop:6}}>Your key is stored in your browser only and sent directly to the Anthropic API. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style={{color:"#a07830"}}>Get a key →</a></div>
+        <div style={{background:"#eae4d4",border:"1px solid #d8d0c0",borderRadius:10,padding:"16px 20px",marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#5a5040",marginBottom:4}}>Anthropic API Key</div>
+          <div style={{fontSize:12,color:"#8a8070",marginBottom:8}}>Entered once per session. Stored in memory only.</div>
+          <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..." autoComplete="off"
+            style={{width:"100%",padding:"10px 14px",fontSize:14,border:"1px solid #c8b898",borderRadius:8,background:"#faf8f2",fontFamily:"monospace",color:"#2a2518",outline:"none"}} />
         </div>
 
-        <FileUploadZone onFile={handleFile} disabled={isProc || !apiKey.trim()} />
+        <FileUploadZone onFile={handleFile} disabled={isProc} />
 
         {file && <div style={{marginTop:12,fontSize:13,color:"#5a5040",display:"flex",alignItems:"center",gap:8}}>
           <span>📄 {file.name}</span><span style={{color:"#a09080"}}>({(file.size/1024/1024).toFixed(1)} MB)</span>
@@ -943,9 +997,6 @@ function SiddurOCRApp() {
         {status==="done"&&allPages.length>0&&<>
           <ResultsSummary allPages={allPages} layoutName={LAYOUTS[selectedLayout]?.name} skippedPages={skippedPages} />
           <button onClick={downloadDocx} style={{width:"100%",padding:"16px 24px",fontSize:17,fontWeight:600,color:"#fff",background:"linear-gradient(135deg,#a07830,#c8a44e)",border:"none",borderRadius:12,cursor:"pointer",marginTop:8,fontFamily:"'Georgia',serif",letterSpacing:0.5,boxShadow:"0 4px 16px rgba(160,120,48,0.3)"}}>⬇ Download Word Document</button>
-          <div style={{marginTop:12,padding:"12px 16px",background:"rgba(90,112,64,0.06)",border:"1px solid rgba(90,112,64,0.15)",borderRadius:10,fontSize:13,color:"#5a5040",lineHeight:1.6}}>
-            <strong>Next step:</strong> Upload the downloaded .docx to a <a href="https://claude.ai" target="_blank" rel="noopener" style={{color:"#5a7040"}}>Claude chat</a> along with <code>siddur_page_numberer.py</code> and ask Claude to run it. This adds accurate lettered page numbers (e.g., 42a, 42b).
-          </div>
         </>}
 
         {status==="idle" && <div style={{marginTop:40,color:"#8a8070",fontSize:13,lineHeight:1.8}}>
@@ -962,7 +1013,7 @@ function SiddurOCRApp() {
 }
 
 
-ReactDOM.render(React.createElement(SiddurOCRApp), document.getElementById("root"));
-</script>
+ReactDOM.createRoot(document.getElementById("root")).render(<SiddurOCRApp />);
+  </script>
 </body>
 </html>

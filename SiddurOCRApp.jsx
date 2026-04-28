@@ -1,17 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = (() => {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
-    const now = new Date();
-    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-    const tfmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
-    return "v" + fmt.format(now) + " " + tfmt.format(now);
-  } catch (_) {
-    return "v" + new Date().toISOString().slice(0, 16).replace("T", " ");
-  }
-})();
+const VERSION_STAMP = "v2026-04-28 build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -33,6 +23,7 @@ Mishkan T'filah has a distinctive layout:
 - These two columns run in parallel
 - English translation/reading text typically appears BELOW the Hebrew/transliteration columns, centered or left-aligned
 - Section headers are in ALL CAPS and CENTERED on the page
+- Some section headers have a Hebrew title (e.g., "בִּרְכוֹת הַשַּׁחַר") CENTERED on its own line, paired with the English ALL CAPS section header directly below it (or the transliteration+English combined, like "BIRCHOT HASHACHAR — MORNING BLESSINGS"). The Hebrew title is extracted as hebrew_section_header. This is DIFFERENT from hebrew_liturgy (body Hebrew, right-aligned) — a hebrew_section_header is CENTERED on the page, not right-aligned, and visually pairs with an English section_header.
 - Instructions are italicized, centered, and NOT in all caps
 - Margin navigation words appear in Hebrew on the outer margins
 - Page numbers appear in the lower corners, often formatted like "2 [120]"
@@ -45,6 +36,7 @@ Identify and classify each element as one of these types:
 - page_number: Numbers in the lower corner, formatted like "2 [120]".
 - instructions: Centered, italicized text giving directions. NOT in all caps. Entirely italic — no <i> tags needed.
 - section_header: Centered text in ALL CAPS. MUST be CENTERED — left-aligned all-caps is transliteration.
+- hebrew_section_header: Hebrew prayer/section title CENTERED on the page (not right-aligned). Typically appears directly above an English section_header. Include all nikkud. This is NOT body Hebrew — body Hebrew is right-aligned and becomes hebrew_liturgy. The Hebrew title of a service or major section (e.g., שַׁחֲרִית לְשַׁבָּת, סֵדֶר קְרִיאַת הַתּוֹרָה) is ALWAYS a hebrew_section_header, even when it is the first element on the page.
 - hebrew_liturgy: Hebrew text, right-aligned. Join all lines into one paragraph. Preserve all vowel marks.
 - transliteration: Phonetic English of Hebrew, left-aligned. Join into one paragraph. The opening words may be in ALL CAPS — capture them as seen; post-processing will normalize.
 - translation: English meaning/reading. Use <i>...</i> around italic portions. Preserve multi-paragraph breaks as blank lines. New readings starting with ALL CAPS words should be separate elements. The opening words may be in ALL CAPS — capture them as seen.
@@ -55,18 +47,18 @@ NOTE: A chatimah (closing blessing formula) often appears as a single line of He
 Return using XML tags:
 
 <elements>
-<element type="page_number" order="1">2 [120]</element>
-<element type="section_header" order="2">KIDDUSH FOR EVENING OF SHABBAT</element>
-<element type="hebrew_liturgy" order="3">hebrew with all nikkud</element>
-<element type="transliteration" order="4">transliteration here</element>
-<element type="translation" order="5">We praise You, <i>Adonai</i>, Sovereign of the universe.</element>
-<element type="footnote" order="6"><i>Kiddush</i> means "sanctification."</element>
+<element type="page_number" order="1">68 [186]</element>
+<element type="hebrew_section_header" order="2">בִּרְכוֹת הַשַּׁחַר</element>
+<element type="section_header" order="3">BIRCHOT HASHACHAR — MORNING BLESSINGS</element>
+<element type="hebrew_liturgy" order="4">hebrew with all nikkud</element>
+<element type="transliteration" order="5">transliteration here</element>
+<element type="translation" order="6">We praise You, <i>Adonai</i>, Sovereign of the universe.</element>
+<element type="footnote" order="7"><i>Kiddush</i> means "sanctification."</element>
 </elements>
 
 CRITICAL ORDERING RULE: Liturgical content must follow: hebrew_liturgy → transliteration → translation. When multiple sections appear on one page, each independently follows this order.
 
 Return ONLY the XML block. No other text.`,
-    detectHints: ["mishkan", "ccar", "reform", "transliteration on left", "hebrew on right", "parallel columns"],
   },
   "kol_haneshamah": {
     name: "Kol Haneshamah",
@@ -155,7 +147,6 @@ FINAL SELF-CHECK before returning:
 8. Hebrew nikkud MUST be present. Double-check.
 
 Return ONLY the XML block.`,
-    detectHints: ["kol haneshamah", "reconstructionist", "block hebrew", "bottom section labels"],
   },
   "other": {
     name: "Other / Unknown",
@@ -175,7 +166,6 @@ Return XML:
 </elements>
 
 Return ONLY the XML block.`,
-    detectHints: [],
   },
 };
 
@@ -263,7 +253,7 @@ function parseElementsXml(text, layoutId) {
   while ((m = re.exec(match[1])) !== null) {
     let t = m[3].replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").trim();
     /* Strip arrow characters */
-    t = t.replace(/[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B73\u25B6\u25C0\u27A1\u2B05-\u2B07\u21A9\u21AA\u27F6\u279C\u279E\u27A4\u2192\u2190\u2191\u2193\u2194\u2195\u21D0-\u21D5\u25BA\u25C4]/g, "").trim();
+    t = t.replace(/[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B73\u25B6\u25C0\u25BA\u25C4\u27F6]/g, "").trim();
     if (m[1] === "transliteration" && layoutId === "kol_haneshamah") t = stripLatinDiacritics(t);
     els.push({ type: m[1], order: parseInt(m[2],10), text: t });
   }
@@ -337,7 +327,7 @@ function cleanHeaderText(t) {
 function postProcessKolHaneshamah(pages) {
   /* Single set for ALL header text — case-insensitive, stripped of punctuation for matching */
   const seenHeaders = new Set();
-  const normalizeHeader = (s) => cleanHeaderText(s).toUpperCase().replace(/['']/g, "'").replace(/\s+/g, " ");
+  const normalizeHeader = (s) => cleanHeaderText(s).toUpperCase().replace(/['’]/g, "'").replace(/\s+/g, " ");
 
   for (const p of pages) {
     if (p.skipped) continue;
@@ -480,7 +470,12 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
         ch.push(new Paragraph({spacing:{before:200,after:200},children:[new TextRun({text:"",font:T,size:Math.round(ms*0.4)})]}));
       }
 
-      if (el.type==="section_header") ch.push(new Paragraph({style:"SectionHeader",spacing:{before:480,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true})]}));
+      if (el.type==="section_header") {
+        /* If directly preceded by a hebrew_section_header, tighten the gap so the two read as one paired heading */
+        const sb = (prevType==="hebrew_section_header") ? 60 : 480;
+        ch.push(new Paragraph({style:"SectionHeader",spacing:{before:sb,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true})]}));
+      }
+      else if (el.type==="hebrew_section_header") ch.push(new Paragraph({style:"HebrewSectionHeader",alignment:AlignmentType.CENTER,spacing:{before:480,after:60},children:[new TextRun({text:el.text,font:T,size:ms,bold:true,rightToLeft:true})]}));
       else if (el.type==="hebrew_header") ch.push(new Paragraph({style:"HebrewHeader",alignment:AlignmentType.RIGHT,spacing:{before:360,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true,rightToLeft:true})]}));
       else if (el.type==="hebrew_liturgy") ch.push(new Paragraph({style:"HebrewLiturgy",alignment:AlignmentType.RIGHT,children:[new TextRun({text:el.text,font:T,size:ms,rightToLeft:true})]}));
       else if (el.type==="transliteration") { const nt=useCapsNorm?normalizeLeadingCaps(el.text):el.text; ch.push(new Paragraph({style:"Transliteration",spacing:{after:240},children:[new TextRun({text:nt,font:T,size:ms})]})); }
@@ -544,6 +539,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
     styles:{paragraphStyles:[
       {id:"PageNumber",name:"Page Number",basedOn:"Normal",run:{font:T,size:ms},paragraph:{alignment:AlignmentType.CENTER,spacing:{before:400,after:200}}},
       {id:"SectionHeader",name:"Section Header",basedOn:"Normal",run:{font:T,size:ms,bold:true},paragraph:{alignment:AlignmentType.CENTER,spacing:{before:480,after:200}}},
+      {id:"HebrewSectionHeader",name:"Hebrew Section Header",basedOn:"Normal",run:{font:T,size:ms,bold:true,rightToLeft:true},paragraph:{alignment:AlignmentType.CENTER,spacing:{before:480,after:60}}},
       {id:"HebrewHeader",name:"Hebrew Header",basedOn:"Normal",run:{font:T,size:ms,bold:true,rightToLeft:true},paragraph:{alignment:AlignmentType.RIGHT,spacing:{before:360,after:200}}},
       {id:"Instructions",name:"Instructions",basedOn:"Normal",run:{font:T,size:is,italics:true},paragraph:{alignment:AlignmentType.LEFT,spacing:{before:p12,after:p12}}},
       {id:"HebrewLiturgy",name:"Hebrew Liturgy",basedOn:"Normal",run:{font:T,size:ms,rightToLeft:true},paragraph:{alignment:AlignmentType.RIGHT,spacing:{after:120}}},
@@ -689,7 +685,7 @@ function ProgressBar({current,total,status}) {
 
 function ResultsSummary({allPages,layoutName,skippedPages}) {
   const c={}; for (const p of allPages) { if(p.skipped) continue; for (const e of p.elements||[]) c[e.type]=(c[e.type]||0)+1; }
-  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
+  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",hebrew_section_header:"Hebrew Section Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
   return (
     <div style={{background:"rgba(200,164,78,0.08)",borderRadius:12,padding:"16px 20px",margin:"16px 0"}}>
       <div style={{fontSize:14,fontWeight:700,color:"#2a2518",marginBottom:4}}>Elements Identified</div>
@@ -852,7 +848,7 @@ export default function SiddurOCRApp() {
     setTimerCancelled(false);setAutoStartCount(-1);
   };
 
-  const isProc=["converting","analyzing","building","detecting"].includes(status);
+  const isProc=["analyzing","building","detecting"].includes(status);
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#f5f0e6 0%,#ebe4d4 50%,#e0d8c4 100%)",fontFamily:"'Georgia','Palatino Linotype',serif",padding:"0 16px"}}>
