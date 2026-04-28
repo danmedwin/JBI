@@ -1,4 +1,4 @@
-# Siddur OCR Project — Complete Report (Updated 2026-04-14)
+# Siddur OCR Project — Complete Report (Updated 2026-04-28)
 
 ## Overview
 
@@ -6,7 +6,7 @@ This project consists of two tools for converting printed Jewish prayer books (s
 
 1. **SiddurOCRApp.jsx** — A React artifact that runs inside Claude's interface. It takes a PDF of siddur pages, sends each page image to Claude's vision API for OCR and layout analysis, then assembles the extracted text into a formatted Word document (.docx).
 
-2. **siddur_page_numberer.py** — A Python post-processing script (currently v14) that takes the Word document output from the artifact and adds accurate page numbers. Since a single source page often spans 2–3 Word pages (due to the larger font), the script renders the document via LibreOffice to determine actual page breaks, then inserts lettered page numbers (e.g., "42a", "42b") so users can navigate back to the original book.
+2. **siddur_page_numberer.py** — A Python post-processing script (currently v15) that takes the Word document output from the artifact and adds accurate page numbers. Since a single source page often spans 2–3 Word pages (due to the larger font), the script renders the document via LibreOffice to determine actual page breaks, then inserts lettered page numbers (e.g., "42a", "42b") so users can navigate back to the original book.
 
 ---
 
@@ -45,6 +45,7 @@ The app supports two specific siddur layouts plus a generic fallback:
 - `header` — Running header at top (skipped in output)
 - `page_number` — e.g., "2 [120]"
 - `section_header` — Centered ALL CAPS text
+- `hebrew_section_header` — Hebrew prayer/section title CENTERED on the page (not right-aligned). Typically appears directly above an English section_header. Include all nikkud. This is NOT body Hebrew; body Hebrew is right-aligned and becomes hebrew_liturgy. The Hebrew title of a service or major section (e.g., שַׁחֲרִית לְשַׁבָּת, סֵדֶר קְרִיאַת הַתּוֹרָה) is ALWAYS a hebrew_section_header, even when it is the first element on the page.
 - `hebrew_liturgy` — Hebrew with all nikkud (vowel marks)
 - `transliteration` — Phonetic English rendering
 - `translation` — English meaning, with `<i>...</i>` for italic portions
@@ -125,6 +126,7 @@ Generic fallback with standard element types. No layout-specific post-processing
 **Named paragraph styles (important for the page numberer):**
 - `PageNumber` (or `PageNumber1` in some KH docs) — Centered, spacing before 400, after 200
 - `SectionHeader` — Centered, bold, spacing before 480, after 200
+- `HebrewSectionHeader` — Centered, bold, RTL, spacing before 480, after 200
 - `HebrewHeader` — Right-aligned, bold, RTL, spacing before 360, after 200
 - `Instructions` — Left-aligned, italic, smaller font (fontSize - 1)
 - `HebrewLiturgy` — Right-aligned, right-to-left
@@ -166,7 +168,17 @@ Generic fallback with standard element types. No layout-specific post-processing
 - **Processing notes:** User can add custom instructions that get appended to the AI prompt
 - **Page range selection:** User can specify which PDF pages to process
 - **Auto-start timer:** When status becomes "ready", a 30-second countdown begins. Processing starts automatically when the timer reaches 0. The user can click "Begin Processing" at any time to start immediately, or click "Don't auto-start" to cancel the timer and wait.
-- **Dynamic version timestamp:** Computed at load time using the user's local timezone (via `Intl.DateTimeFormat`, falling back to ISO format).
+- **Fixed build timestamp:** The version stamp (e.g., "v2026-04-28 build") is hardcoded at artifact creation time, so each version of the file displays the date it was built. This replaces the earlier dynamic timestamp that showed the current date/time at load.
+
+### Standalone HTML Deployment
+
+The app is also deployed as a standalone HTML file at `https://techrabbi.org/JBI/siddur-ocr.html`. The standalone version differs from the Claude artifact in two ways:
+
+1. **API key gate screen:** On load, visitors see a gate screen prompting for their Claude API key (`sk-ant-...`). The key is validated (must start with `sk-` and be >10 chars), stored in `sessionStorage` for the browser tab session, and passed into the React app state. No separate password is required.
+
+2. **Direct API headers:** Since the standalone version calls the Anthropic API directly from the browser (not proxied through Claude's interface), all fetch calls include three additional headers: `x-api-key` (the user's key), `anthropic-version: 2023-06-01`, and `anthropic-dangerous-direct-browser-access: true`.
+
+The React code, system prompts, and document-building logic are identical between the artifact and HTML versions.
 
 ### How to Use
 
@@ -216,7 +228,7 @@ The script runs seven steps:
 
 **Step 2 — Render with LibreOffice:** Convert .docx → PDF via LibreOffice headless. Extract text with `pdftotext -layout` (fallback to pypdf). Strip Unicode bidirectional control characters.
 
-**Step 3 — Map source pages to Word pages:** Search for each marker's text in the PDF pages sequentially forward (critical for handling duplicate page numbers). Pass 1: exact line match. Pass 2: word-boundary regex, filtering out false matches inside "Page X skipped" messages. Sanity cap: no single source page spans more than 8 Word pages. Empty rendered pages are filtered out to prevent phantom labels.
+**Step 3 — Map source pages to Word pages:** Search for each marker's text in the PDF pages sequentially forward (critical for handling duplicate page numbers). Pass 1: exact line match. Pass 2: word-boundary regex, filtering out false matches inside "Page X skipped" messages. Sanity cap: no single source page spans more than 8 Word pages. Empty rendered pages are filtered out to prevent phantom labels. Mapping stops at the "Footnotes" header to prevent false matches from footnote text echoing main content phrases (see v15 notes). A MAX_JUMP guard rejects matches that leap forward more than 15 Word pages.
 
 **Step 4 — Compute labels:** For source pages spanning multiple Word pages, generate lettered suffixes (42a, 42b, 42c).
 
@@ -232,7 +244,7 @@ The script runs seven steps:
 
 Rules in priority order:
 
-1. **Section headers** always push to the next page — break before them regardless of position. Scans backward past attributions for cleaner breaks.
+1. **Section headers** always push to the next page — break before them regardless of position. Scans backward past attributions and Hebrew header pairs for cleaner breaks. Recognizes all three header styles: "Section Header", "Heading", and "Hebrew Section Header".
 2. **New readings** (starting with ALL CAPS, excluding section headers) in the bottom two-thirds go to next page. Scans backward past consecutive new readings.
 3. **Hebrew → Transliteration boundary:** Splits transliteration to keep the opening portion with preceding Hebrew. Strategy: blank-line split first, then 40% midpoint, then fallback to inserting before the transliteration.
 4. **Hebrew after non-Hebrew:** Style transitions at Hebrew boundaries.
@@ -248,7 +260,11 @@ Returns a 3-tuple `(para_index, split_flag, structural)`. The `structural` flag 
 #### Post-insertion adjustments
 
 - `adjust_for_short_title`: Don't break after a short title-like paragraph (<60 chars) — keep it with the next paragraph of the same style.
-- `adjust_insert_for_grouping`: Don't strand section headers (push to next page) or separate attributions/instruction notes from their readings.
+- `adjust_insert_for_grouping`: Don't strand section headers or Hebrew header pairs (push to next page). Don't split a Hebrew title from its paired English section header. Don't separate attributions/instruction notes from their readings.
+
+#### Header Pair Detection (`is_header_pair_start`)
+
+Detects when a Hebrew-styled paragraph is directly followed by a SectionHeader, indicating a paired Hebrew/English service title (e.g., שַׁחֲרִית לְשַׁבָּת followed by SHACHARIT L'SHABBAT I). These pairs should never be split by a page label. This helper catches cases where the Hebrew title is mistyled as HebrewLiturgy instead of HebrewSectionHeader, providing a safety net regardless of AI classification.
 
 #### Attribution Detection (`is_attribution`)
 
@@ -373,7 +389,7 @@ Version 13 improved transliteration paragraph splitting and expanded the scan ra
 
 ---
 
-### v14 — Cleanup pass (current version)
+### v14 — Cleanup pass
 
 Version 14 adds a post-processing cleanup pass (Step 7) that runs after all numbering is complete. Three rules address structural artifacts left by the earlier steps.
 
@@ -411,12 +427,45 @@ Total paragraphs: 297 → 262 (35 removed). Zero orphaned blank-break paragraphs
 
 ---
 
+### v15 — Footnotes boundary and header pair handling (current version)
+
+Version 15 fixes two bugs discovered when processing a merged Mishkan T'filah Shabbat document (Shabbat Morning + Torah Service + Concluding Prayers) with a consolidated footnotes section at the end.
+
+#### Issue 1: Footnotes text echo breaks paragraph-to-page mapping
+
+**Root cause:** `build_paragraph_page_map` matches paragraph text against PDF-rendered text to determine which docx paragraph falls on which Word page. The matching is greedy and forward-only (tracked by `min_page`). When the consolidated footnotes section at the end of the document contained phrases echoing main content (e.g., "ברכת הגומל Birkat HaGomeil" appeared both as a section header on ~Word page 170 and as footnote text on Word page 247), the mapper matched the main-content paragraph to the footnotes page. Once `min_page` jumped from 169 to 247, every paragraph between those pages became unmappable, producing 30+ "No insertion point" warnings across the Torah Service and Concluding Prayers.
+
+**Fix:** Two guards added to `build_paragraph_page_map`:
+
+1. **Footnotes boundary:** A pre-scan finds the first paragraph whose text is "Footnotes" and records its index. The mapping loop stops at that index. Footnotes don't need page labels, so there is no reason to include them in the mapping.
+
+2. **Jump guard (`MAX_JUMP = 15`):** If a candidate match would leap forward more than 15 Word pages from the current `min_page`, the match is skipped as a likely false positive. This protects against any other text-echo scenarios beyond footnotes (e.g., repeated liturgical refrains, cross-references).
+
+#### Issue 2: Page label inserted between paired Hebrew/English service titles
+
+**Root cause:** The document opens with a Hebrew service title (שַׁחֲרִית לְשַׁבָּת א׳, styled HebrewLiturgy) followed by its English counterpart (SHACHARIT L'SHABBAT I, styled SectionHeader). When Pass 1 found "INSPIRATION FOR PRAYER" (also a SectionHeader) later on Word page 1, it scanned backward past "SHACHARIT L'SHABBAT I" (also SectionHeader) but stopped at the Hebrew title because `is_section_header` only recognized "Section Header" and "Heading" styles, not "Hebrew Section Header". This caused 66a to be inserted between the Hebrew and English titles, splitting the pair.
+
+**Fix:** Three changes:
+
+1. **`is_section_header` expanded:** Now also matches "Hebrew Section Header" style, so Hebrew service titles styled correctly are treated as headers during backward scanning.
+
+2. **`is_header_pair_start` helper (new):** Detects when a Hebrew-styled paragraph is directly followed by a SectionHeader. Returns `True` for the Hebrew paragraph in such pairs. This catches cases where the Hebrew title is mistyled as HebrewLiturgy (an OCR classification error), providing a safety net regardless of AI output.
+
+3. **Integration in Pass 1 and `adjust_insert_for_grouping`:** Pass 1's backward scan now skips past both section headers AND header pair starts. `adjust_insert_for_grouping` adds a rule preventing insertion between a Hebrew header-pair start and its following SectionHeader.
+
+#### Corresponding OCR app change
+
+The Mishkan T'filah system prompt for `hebrew_section_header` was updated to add: "The Hebrew title of a service or major section (e.g., שַׁחֲרִית לְשַׁבָּת, סֵדֶר קְרִיאַת הַתּוֹרָה) is ALWAYS a hebrew_section_header, even when it is the first element on the page." This helps prevent the misclassification at the source, while the `is_header_pair_start` safety net in the numberer handles cases where the AI still gets it wrong.
+
+---
+
 ## File Inventory
 
 | File | Purpose |
 |------|---------|
 | `SiddurOCRApp.jsx` | React artifact — PDF → Word converter |
-| `siddur_page_numberer.py` | Python script (v14) — adds lettered page numbers |
+| `siddur-ocr.html` | Standalone HTML deployment (API key gate + full app) |
+| `siddur_page_numberer.py` | Python script (v15) — adds lettered page numbers |
 
 ---
 
@@ -439,6 +488,8 @@ Total paragraphs: 297 → 262 (35 removed). Zero orphaned blank-break paragraphs
 8. **Small caps divine names:** The AI may occasionally render small-caps divine names as italic or mixed case instead of ALL CAPS. The prompt now includes explicit instructions and a self-check item for this.
 
 9. **Transliteration split heuristics:** The automatic split-point selection for transliteration paragraphs targets a percentage-based midpoint. In some cases the split may land a sentence too late (e.g., after the third *b'rakhah* instead of the second). Manual adjustment of the output may be needed for specific pages.
+
+10. **Merged documents with consolidated footnotes:** When multiple processed documents are merged and their footnotes are consolidated into a single section at the end, the footnotes may echo phrases from the main content. The v15 footnotes boundary and jump guard handle this, but documents with highly repetitive liturgical refrains could theoretically still produce false matches within the 15-page jump window.
 
 ---
 
@@ -531,6 +582,22 @@ Total paragraphs: 297 → 262 (35 removed). Zero orphaned blank-break paragraphs
 - `_el_set_text` preserves page break runs when renaming labels
 - Tested on KH Machzor Concluding Prayers: 2 collapsed, 2 labeled, 31 consolidated, 297→262 paragraphs
 
+### 2026-04-28 Session — Artifact Changes
+
+- **`hebrew_section_header` prompt clarification:** Added explicit note that Hebrew service/section titles (e.g., שַׁחֲרִית לְשַׁבָּת, סֵדֶר קְרִיאַת הַתּוֹרָה) are ALWAYS `hebrew_section_header`, even as the first element on a page. This addresses a misclassification where the AI tagged the opening Hebrew service title as `hebrew_liturgy`.
+- **Fixed version timestamp:** Replaced dynamic `VERSION_STAMP` (computed at page load via `Intl.DateTimeFormat`) with a hardcoded build date string (e.g., "v2026-04-28 build"). Each artifact version now displays the date it was created, making it easy to identify which version is most recent.
+- **Standalone HTML deployment updated:** Replaced the SHA-256 password gate with an API key gate screen. The gate prompts "Enter your Claude API key to continue" and validates the key format (starts with `sk-`, >10 chars). The key is stored in `sessionStorage` and read into React state on app load. The separate inline API key input field was removed from the main app window since the gate screen handles it.
+
+### 2026-04-28 Session — Page Numberer v15
+
+- **Footnotes boundary in `build_paragraph_page_map`:** Mapping stops at the first "Footnotes" header paragraph, preventing false matches from footnote text that echoes main content phrases.
+- **Jump guard (`MAX_JUMP = 15`):** Matches that would leap forward more than 15 Word pages are skipped as likely false positives, protecting against text-echo scenarios.
+- **`is_section_header` expanded:** Now recognizes "Hebrew Section Header" in addition to "Section Header" and "Heading".
+- **`is_header_pair_start` helper (new):** Detects Hebrew paragraphs directly followed by a SectionHeader (paired service titles). Used in Pass 1's backward scan and in `adjust_insert_for_grouping` to prevent splitting these pairs.
+- **Pass 1 scans past header pairs:** The backward scan from section headers now skips past both section headers AND Hebrew header-pair starts.
+- **`adjust_insert_for_grouping` enhanced:** New Rule 2 prevents insertion between a Hebrew header-pair start and its following SectionHeader.
+- **Tested on merged MT Shabbat document:** Warnings dropped from 30+ to 2, and the 66a header-pair split was eliminated.
+
 ---
 
 ## For Continuing This Work
@@ -553,9 +620,12 @@ The artifact runs as a Claude React artifact (`.jsx` file rendered in Claude's i
 - **`useCapsNorm`:** Flag in `buildDocx` set only for `mishkan_tfilah`. Guards all `normalizeLeadingCaps` calls. Adding it for other layouts would incorrectly lowercase ALL CAPS content.
 - **Content filter retry:** Uses nested try/catch — inner catch for content filter (triggers safe mode retry), outer catch for final failure.
 - **`cleanup_pass` uses raw XML:** All three rules operate on lxml elements directly (`body.findall`, `el.find`), not `doc.paragraphs`, because Step 6 inserts raw XML elements that lack python-docx wrappers. The `_el_text` helper reads only `w:r/w:t` to avoid triple-counting from `itertext()`.
+- **`is_header_pair_start`:** Uses raw lxml sibling traversal to look ahead from a Hebrew paragraph to the next non-empty paragraph. Returns `True` if that sibling has a SectionHeader or Heading pStyle. Catches mistyled Hebrew titles regardless of their assigned style.
+- **`build_paragraph_page_map` guards:** Footnotes boundary and MAX_JUMP work together. The boundary prevents mapping into the footnotes section entirely. MAX_JUMP catches any remaining false matches from repeated phrases within the main content (e.g., liturgical refrains that appear verbatim on multiple pages). Both guards only skip matches; they never force a match.
 
 ---
 
 ## Additional Notes
 
-- A hosted version of the app is available at https://techrabbi.org/JBI/siddur-ocr.html — this version requires an Anthropic API key. The Claude artifact version does not require a key.
+- A hosted version of the app is available at https://techrabbi.org/JBI/siddur-ocr.html. This version requires an Anthropic API key, entered on a gate screen at load. The Claude artifact version does not require a key.
+- When merging multiple processed documents, normalize the `PageNumber` style across source files before running the page numberer (e.g., `PageNumber1` from one source should be changed to `PageNumber`). Consolidate footnotes into a single section at the end of the merged document.
