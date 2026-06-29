@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-05-11g build";
+const VERSION_STAMP = "v2026-06-29 build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -718,6 +718,8 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
   const { Document, Paragraph, TextRun, AlignmentType, PageBreak, BorderStyle } = window.docx;
   const T="Tahoma", ms=fontSize*2, is=Math.round((fontSize-1)*2), fs=Math.round((fontSize-2)*2), hs=Math.round((fontSize+2)*2), p12=240;
   const useCapsNorm = (layoutId === "mishkan_tfilah"); /* Only normalize ALL CAPS for MT layout */
+  const inlineFootnotes = (layoutId === "kol_haneshamah"); /* KN keeps footnotes on the page; all other layouts collect them to a Footnotes section at the end of the document */
+  const endFootnotes = [];
   const ch = [];
 
   for (let pi=0; pi<allPages.length; pi++) {
@@ -779,12 +781,22 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
            (italic only where marked). <b> tags add bold where marked. */
         ch.push(new Paragraph({style:"Instructions",spacing:{before:p12,after:p12},children:makeTextRuns(el.text,T,is,{},{defaultItalic:true})}));
       } else if (el.type==="footnote") {
-        /* Footnote: rendered in-place at the element's original position. Small font,
-           italic-tag aware via makeTextRuns. No horizontal rule — the smaller font is
-           the visual cue. Split on double-newlines for multi-paragraph footnotes. */
+        /* Footnote placement depends on layout:
+           - Kol Haneshamah (KN): rendered IN-PLACE at the element's original position so
+             each note stays on its own page. Small font, italic-tag aware via makeTextRuns.
+             No horizontal rule — the smaller font is the visual cue.
+           - All other layouts (e.g. Mishkan T'filah): footnotes are NOT shown in-place;
+             they are collected and emitted together in a Footnotes section at the END of
+             the document (built after the page loop below).
+           Split on double-newlines for multi-paragraph footnotes. */
         for (const fp of (el.text||"").split(/\n\s*\n/)) {
           const t = fp.replace(/\n/g," ").trim();
-          if (t) ch.push(new Paragraph({spacing:{before:120,after:120},children:makeTextRuns(t,T,fs)}));
+          if (!t) continue;
+          if (inlineFootnotes) {
+            ch.push(new Paragraph({spacing:{before:120,after:120},children:makeTextRuns(t,T,fs)}));
+          } else {
+            endFootnotes.push({pageNumber:pg.pageNumber||String(pi+1),text:t});
+          }
         }
       } else if (el.type==="divider") {
         /* Divider: a decorative ornament between two readings. Render as extra blank
@@ -797,6 +809,21 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
     }
     if (pg.pageNumber) ch.push(new Paragraph({style:"PageNumber",children:[new TextRun({text:pg.pageNumber,font:T,size:ms})]}));
     if (pi<allPages.length-1) ch.push(new Paragraph({children:[new PageBreak()]}));
+  }
+
+  /* Footnotes section at the END of the document (non-KN layouts only). Footnotes are
+     grouped under the page number they came from so readers can locate them. */
+  if (!inlineFootnotes && endFootnotes.length) {
+    ch.push(new Paragraph({children:[new PageBreak()]}));
+    ch.push(new Paragraph({style:"SectionHeader",spacing:{before:240,after:240},children:[new TextRun({text:"Footnotes",font:T,size:ms,bold:true})]}));
+    let lastPage=null;
+    for (const fn of endFootnotes) {
+      if (fn.pageNumber!==lastPage) {
+        ch.push(new Paragraph({spacing:{before:200,after:60},children:[new TextRun({text:"Page "+fn.pageNumber,font:T,size:fs,bold:true,color:"996633"})]}));
+        lastPage=fn.pageNumber;
+      }
+      ch.push(new Paragraph({spacing:{before:60,after:60},children:makeTextRuns(fn.text,T,fs)}));
+    }
   }
 
   return new Document({
@@ -1209,7 +1236,7 @@ export default function SiddurOCRApp() {
           <div><strong style={{color:"#a07830"}}>2.</strong> AI auto-detects the siddur layout (you can override).</div>
           <div><strong style={{color:"#a07830"}}>3.</strong> Adjust font size, add notes, then hit <strong>Begin Processing</strong>.</div>
           <div><strong style={{color:"#a07830"}}>4.</strong> Each page is analyzed: Hebrew with nikkud, transliteration, translation, and more.</div>
-          <div><strong style={{color:"#a07830"}}>5.</strong> A Word document is generated with named paragraph styles and per-page footnotes.</div>
+          <div><strong style={{color:"#a07830"}}>5.</strong> A Word document is generated with named paragraph styles; footnotes stay on the page for Kol Haneshamah and are collected at the end of the document for other layouts.</div>
         </div>}
       </div>
     </div>
