@@ -80,7 +80,7 @@
 const { useState, useCallback, useRef, useEffect } = React;
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-04-28 build";
+const VERSION_STAMP = "v2026-05-11g build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -101,6 +101,8 @@ Mishkan T'filah has a distinctive layout:
 - Transliteration (phonetic English rendering of Hebrew) appears LEFT-ALIGNED on the LEFT side
 - These two columns run in parallel
 - English translation/reading text typically appears BELOW the Hebrew/transliteration columns, centered or left-aligned
+
+CRITICAL — output order for parallel columns: When a page has Hebrew in the right column and transliteration/English in the left column, output each prayer as a COMPLETE UNIT before moving to the next prayer. Do NOT read all left-column content first, then all right-column content. For each prayer on the page, output: hebrew_liturgy → transliteration → translation. This keeps each prayer's elements together rather than interleaving elements from different prayers.
 - Section headers are in ALL CAPS and CENTERED on the page
 - Some section headers have a Hebrew title (e.g., "בִּרְכוֹת הַשַּׁחַר") CENTERED on its own line, paired with the English ALL CAPS section header directly below it (or the transliteration+English combined, like "BIRCHOT HASHACHAR — MORNING BLESSINGS"). The Hebrew title is extracted as hebrew_section_header. This is DIFFERENT from hebrew_liturgy (body Hebrew, right-aligned) — a hebrew_section_header is CENTERED on the page, not right-aligned, and visually pairs with an English section_header.
 - Instructions are italicized, centered, and NOT in all caps
@@ -147,13 +149,64 @@ Return ONLY the XML block. No other text.`,
 
 YOUR #1 PRIORITY: Hebrew vowel marks (nikkud) MUST be preserved with 100% fidelity. Every dot, dash, and mark above or below Hebrew letters must appear. Outputting Hebrew without nikkud is a critical failure.
 
+TRANSCRIBE, DO NOT CORRECT. This is a faithful OCR transcription task, not a translation or proofreading task. Transcribe EXACTLY what appears in the image, even if you believe the source contains an error, an unusual spelling, an unconventional vocalization, or grammatically "wrong" nikkud. NEVER:
+- Add a nikkud mark that isn't visible in the image because you think the word "should" have one
+- Remove a nikkud mark that IS visible because you think it shouldn't be there
+- Substitute a different nikkud because the visible one is grammatically unusual (e.g., DO NOT change a patach to a kamatz just because the word is usually spelled with kamatz)
+- Replace one Hebrew letter with another to make a more familiar word (e.g., DO NOT turn לְסֵפָר into לִסְפֹּר because the latter is a more common form)
+- Auto-complete partial words or "fix" what looks like a misprint
+- Modernize archaic spellings or normalize unusual vocalizations
+If the image clearly shows nikkud X under letter Y, output exactly nikkud X under letter Y — regardless of whether that's the grammatically expected form. The user wants what the printed page actually says, not what it should have said. When in doubt, render the mark you can see; do not guess based on context.
+
+NIKKUD VISUAL DISTINCTIONS — common confusions to watch for carefully (look closely at the actual shape, do NOT guess):
+- Patach (ַ) vs Kamatz (ָ): both appear below the letter. Patach is a single HORIZONTAL line. Kamatz is a horizontal line with a small VERTICAL stroke descending from its center, forming a T-shape (or inverted T). If you see any vertical tick, it is kamatz, not patach.
+- Hirik (ִ) vs Shva (ְ): both appear below the letter. Hirik is a SINGLE dot. Shva is TWO dots stacked vertically. Count the dots.
+- Tzeireh (ֵ) vs Segol (ֶ): both appear below the letter. Tzeireh is TWO dots arranged HORIZONTALLY (side by side). Segol is THREE dots arranged in a downward-pointing triangle (one dot on top, two dots below).
+- Cholam (ֹ): a single dot ABOVE the letter, typically toward the upper-left. When it appears on top of a vav (וֹ), it is "cholam male"; otherwise "cholam haser".
+- Dagesh (ּ): a dot INSIDE the body of a letter (centered within it). Do not confuse with cholam (above the letter).
+- Sheva-na vs Sheva-nach are written identically (ְ) — preserve the mark, do not infer pronunciation.
+- Before outputting any Hebrew word, mentally re-check each nikkud against the image. Substituting a similar-looking mark is a failure even if the word "looks right."
+
 CRITICAL: Do NOT introduce stray characters, numbers, or artifacts.
 
 CRITICAL: If you see any arrows in the text (curved, straight, or decorative — e.g., ↩ → ← ↑ ↓ ➜ ➔ ▶ ◀ ⟶ ↪), SKIP them entirely. Do not include arrows in the output.
 
-ITALIC PRESERVATION: When English text contains italic words or phrases, wrap the italic portions in <i>...</i> tags. Not for Hebrew or transliteration. Instructions are entirely italic — no tags needed.
+ITALIC PRESERVATION: When English text contains italic words or phrases, wrap the italic portions in <i>...</i> tags. Not for Hebrew or transliteration.
+
+BOLD PRESERVATION: When English text contains BOLD words or phrases (visually heavier weight than the surrounding text), wrap them in <b>...</b> tags. Apply to translations, instructions, attributions, footnotes — anywhere English text appears with bold formatting. Example: "Reader: <b>And there was evening, there was morning</b> — a single day." Bold and italic are orthogonal; both can apply to the same span (e.g., <b><i>bold italic phrase</i></b>). Do NOT use <b> tags on Hebrew or transliteration text. Do NOT invent bold where none exists in the source. NEVER emit other HTML-style markup tags (no <u>, no <em>, no <strong>, no <span>) — only <i> and <b> are supported.
+
+ITALIC EXCEPTIONS IN OTHERWISE-ITALIC PARAGRAPHS — be CONSERVATIVE: Instructions and attributions are normally entirely italic — in that default case, do NOT use any tags. ONLY switch to explicit <i>...</i> markup when the paragraph contains TRANSLITERATED HEBREW TERMS set in upright (non-italic) type to distinguish them from the surrounding italic English. When you DO use <i> markup, you MUST be thorough: every transliterated Hebrew term in the paragraph must be left non-italic. Missing one is a critical failure.
+
+COMMON HEBREW TRANSLITERATED TERMS that are typically rendered upright (non-italic) inside italic paragraphs — if you see ANY of these in an italic paragraph, switch to <i>...</i> markup mode and leave THESE terms bare (non-italic) while wrapping all surrounding English in <i>...</i>: Kabbalat Shabbat, Kabbalat Hashanah, Kabbalat HaShanah, Yamim Nora'im, sheliaḥ tzibur, sheliach tzibur, ma'ariv, maariv, shaḥarit, shacharit, minḥah, minhah, mincha, musaf, mussaf, ne'ilah, neilah, Aleinu, Sh'ma, Shema, Amidah, Kaddish, Kedushah, Sh'moneh Esreh, Birkat Hamazon, Hallel, Selichot, S'lichot, Avinu Malkeinu, Avodah, Hoshanot, Tashlich, Tashlikh, Kol Nidre, Vidui, Yizkor, Unetaneh Tokef, Aseret Y'mei Teshuvah, Mahzor, Machzor, midrash, halakhah, halacha, kavanah, kavvanah, derash, nusaḥ, nusach. This is not an exhaustive list — any Hebrew-derived word (transliterated proper nouns for Jewish holidays, prayer names, service names, ritual objects, Hebrew text categories) that appears in an italic paragraph should follow the same rule.
+
+DO NOT mark any of the following as non-italic, even if you think they "look different":
+- English page references (e.g., "pages 23-57", "p. 14", "see page 102")
+- English numbers, dates, or numeric ranges
+- Ordinary English nouns/verbs/articles
+- Punctuation, slashes, commas, dashes
+- ANY span where you are not 100% certain it is visually upright in the source
+
+When in doubt, treat the text as italic (omit the tag). It is FAR better to render a word italic when it should be upright than to render a word upright when it should be italic. Over-marking non-italic exceptions is a critical failure.
+
+If the entire paragraph is italic with NO upright exceptions, emit the paragraph with no <i> tags at all.
+
+If the paragraph has exceptions, switch to explicit markup: wrap each italic span with <i>...</i>. Example for a paragraph reading "the sheliaḥ tzibur leads the congregation" where ONLY "sheliaḥ tzibur" is upright: <i>the</i> sheliaḥ tzibur <i>leads the congregation</i>.
 
 SMALL CAPS / DIVINE NAMES: Words that appear in SMALL CAPS in the original (e.g., THE ETERNAL ONE, THE BOUNDLESS ONE, THE RADIANCE, THE MANY-NAMED, MY REDEEMER, THE SUPREME ONE, THE ALMIGHTY, THE EMINENCE, GOD) should be rendered in ALL CAPS in the output — NOT italic, NOT mixed case. Do NOT use <i> tags for small-caps text. Example: "Blessed are you, THE HOLY ONE" — not "Blessed are you, <i>The Holy One</i>".
+
+TRANSLITERATION — DOTTED H (CHET): Kol Haneshamah transliteration uses an "h" with a dot DIRECTLY BENEATH it to represent the Hebrew letter chet (ח). You MUST output this as the precomposed Unicode character ḥ (U+1E25) for lowercase, and Ḥ (U+1E24) for uppercase.
+
+DOTTED H — REQUIRED FORM: ḥ (single character, U+1E25) or Ḥ (single character, U+1E24).
+
+DOTTED H — FORBIDDEN OUTPUTS (these are all WRONG, never produce them):
+- A bare "h" with no dot when the source shows a dot below
+- "ch" (e.g., "Chanukkah" instead of "Ḥanukkah")
+- "h" followed by a combining mark (e.g., h + U+0323) — always use the precomposed character
+- "h" with a dot ABOVE instead of below (that would be ḣ, U+1E22 — WRONG)
+- "h" followed by an "e" with any kind of dot/diacritic (e.g., hė, hë, he·, h·e) — there is no "e" after the h; the dot belongs UNDER the h itself
+- Any other approximation involving extra letters or repositioned dots
+
+Words where the dotted-h appears include: Ḥanukkah, Pesaḥ, simḥah, raḥamim, ruaḥ, beraḥot, eḥad, meḥayyey, koaḥ, mashiaḥ, sheliaḥ, shaḥarit, miḥyah, etc. If you see a dot under an h in the printed transliteration, output ḥ or Ḥ — nothing else. Do not normalize, strip, reposition, or invent companion characters.
 
 RESPONSIVE READINGS: Some prayers have labels like "Reader:" or "Congregation:" in italics followed by regular (non-italic) text. These are translation elements, NOT instructions. Wrap ONLY the label in <i> tags: "<i>Reader:</i> Let God's name be made great..." The text after the label stays in regular type.
 
@@ -180,12 +233,14 @@ Kol Haneshamah layout:
     <element type="attribution" order="3">Author of Block A</element>
     <element type="translation" order="4">Block B text...</element>
 - Author attributions: right-aligned or centered, smaller italic text (e.g., "Denise Levertov", "Chaim Stern (Adapted)"). Each attribution element goes IMMEDIATELY after the translation element it credits.
+- Decorative dividers BETWEEN readings: Kol Haneshamah sometimes places a small horizontal ornament (a curly flourish, swirl, fleuron, knot, or similar decorative glyph — NOT a horizontal rule line) between two separate readings on the same page. When you see such an ornament between content blocks, emit a "divider" element. The text content of the divider element doesn't matter — use "·" or "✦" as a placeholder. The marker itself is what counts; post-processing handles the spacing. If a divider appears at the very bottom of the page after all readings (just above the page footer/page number area), still emit it — post-processing will drop trailing dividers.
 - Instructions in italics
 - Bottom of page may contain identifying text:
   * Even pages typically show the name of the specific prayer or section in the service (left-aligned)
   * Odd pages typically show the name of the overall service, e.g., "Rosh Hashanah Ma'ariv" (right-aligned)
   Extract ALL bottom text as bottom_section_name (even/left) or bottom_service_name (odd/right). Include every occurrence — deduplication is handled in post-processing.
 - Footnotes below horizontal rule. CRITICAL: ANY text that appears BELOW a horizontal line/rule on the page is a FOOTNOTE — this includes text labeled COMMENTARY, NOTE, KAVANAH, DERASH, or unlabeled paragraphs. All such text must be extracted as footnote elements, NOT as translation elements.
+- INSTRUCTIONS vs FOOTNOTES — positional rule: A horizontal rule near the BOTTOM of the page is what defines a footnote zone. Italic prose that appears ABOVE any horizontal rule (especially at the TOP of a page, before any main content) is an "instructions" element, NEVER a footnote. Examples of instructions that are NOT footnotes: an italic introductory paragraph at the top of a page explaining what the section covers (e.g., "Kabbalat Hashanah, pages 23-57, provides a broad variety of options..."), italic directives like "Choose from the following:" or "Read responsively". If there is no horizontal rule above the italic text, it cannot be a footnote.
 
 Element types:
 - page_number: Page number — from running header "SECTION / NUMBER" or bottom. Extract ONLY the number.
@@ -193,24 +248,26 @@ Element types:
 - hebrew_header: Hebrew prayer name appearing as the first line in a slightly larger font. Include all nikkud. Bold in the original.
 - bottom_section_name: Identifying text at bottom of even pages (prayer/section name). Preserve case as shown.
 - bottom_service_name: Identifying text at bottom of odd pages (service name). Preserve case as shown.
-- instructions: Italicized directions. Entirely italic — no <i> tags.
+- instructions: Italicized directions or introductory prose appearing ABOVE any horizontal rule. Entirely italic — no <i> tags. Includes multi-sentence intro paragraphs at the top of a page describing what the section contains. If italic text is NOT below a horizontal rule, it is "instructions", not "footnote".
 - hebrew_liturgy: Hebrew blocks WITH ALL NIKKUD. Merge two-column Hebrew into one line.
 - transliteration: Phonetic English. Capture exactly as seen.
 - translation: English meaning. Use <i>...</i> for italics. Combine running prose into continuous paragraphs — do NOT preserve column line breaks. Each visually separated passage = its own translation element.
-- attribution: Author/source credit IMMEDIATELY after the specific reading it belongs to. NEVER at the end of all readings.
-- footnote: ALL text below a horizontal rule on the page. Includes COMMENTARY, NOTE, KAVANAH, DERASH sections and unlabeled notes. Use <i>...</i> for italic portions. If a footnote ends with an author's initials or name (e.g., "D.A.T.", "M.M.K.", "R.H."), keep them as part of the footnote — do NOT extract them as separate attribution elements.
+- attribution: SHORT (typically 1-5 words) italic author/source credit, usually right-aligned or centered, appearing IMMEDIATELY after the specific reading it belongs to. Examples: "Denise Levertov", "Chaim Stern (Adapted)", "Sidney Greenberg (Adapted)", "Talmud, Berakhot 17a". Parenthetical qualifiers like "(Adapted)" or "(Translation)" are part of the attribution, not separate. An attribution is NOT a multi-sentence paragraph — if the italic text spans multiple sentences or gives directions, it's "instructions", not "attribution". NEVER place attribution at the end of all readings.
+- divider: A decorative ornament between readings (curly flourish, fleuron, knot, swirl). Emit when you see this glyph between content blocks. Text content doesn't matter; "·" works as a placeholder. NOT for horizontal rule lines (those separate footnotes from main content).
+- footnote: ALL text below a horizontal rule on the page. REQUIRES a horizontal rule above it on the same page. Includes COMMENTARY, NOTE, KAVANAH, DERASH sections and unlabeled notes. Use <i>...</i> for italic portions. If a footnote ends with an author's initials or name (e.g., "D.A.T.", "M.M.K.", "R.H."), keep them as part of the footnote — do NOT extract them as separate attribution elements. NEVER classify italic text at the top of a page (before any horizontal rule) as a footnote — that is "instructions".
 
 Return using XML. Here is an example of a page with MULTIPLE readings and attributions — note how each reading is a separate element:
 <elements>
 <element type="section_header" order="1">MEDITATIONS</element>
 <element type="translation" order="2">First reading: all text combined into one paragraph regardless of column line breaks...</element>
 <element type="attribution" order="3">First Author</element>
-<element type="translation" order="4">Second reading on the same page, also as one paragraph...</element>
-<element type="attribution" order="5">Second Author</element>
-<element type="translation" order="6">Third reading, if present...</element>
-<element type="bottom_section_name" order="7">Amidah</element>
-<element type="bottom_service_name" order="8">Kabbalat Shabbat</element>
-<element type="page_number" order="9">127</element>
+<element type="divider" order="4">·</element>
+<element type="translation" order="5">Second reading on the same page, also as one paragraph...</element>
+<element type="attribution" order="6">Second Author</element>
+<element type="translation" order="7">Third reading, if present...</element>
+<element type="bottom_section_name" order="8">Amidah</element>
+<element type="bottom_service_name" order="9">Kabbalat Shabbat</element>
+<element type="page_number" order="10">127</element>
 </elements>
 
 ORDERING: section_header first, then hebrew_header, then content (hebrew_liturgy → transliteration → translation → attribution, repeating for each reading), page_number LAST.
@@ -220,10 +277,16 @@ FINAL SELF-CHECK before returning:
 2. Each attribution must appear DIRECTLY after the translation element it credits — not later.
 3. If you have only 1 translation element but see multiple separated passages on the page, SPLIT them into separate elements.
 4. Did you combine running prose into paragraphs? Column line breaks should NOT appear in your output.
-5. Is there a horizontal rule on the page? ALL text below it must be footnote elements, not translation.
+5. Is there a horizontal rule on the page? ALL text below it is "footnote". ALL italic text ABOVE any horizontal rule (or on a page with no rule at all) is "instructions", never "footnote".
 6. Did you render SMALL CAPS divine names as ALL CAPS (not italic, not mixed case)?
 7. For responsive readings, did you wrap ONLY the "Reader:" / "Congregation:" labels in <i> tags?
-8. Hebrew nikkud MUST be present. Double-check.
+8. Hebrew nikkud MUST be present. Re-verify each vowel against the image — patach vs kamatz, hirik vs shva, tzeireh vs segol are visually similar; do NOT guess. Count dots, look for vertical strokes.
+9. Did you use ḥ (U+1E25) and Ḥ (U+1E24) for every dotted-h in transliterations? No bare "h" where a dot should be, no "ch", no "h" followed by an "e" with a dot, no dot above the h.
+10. Author credits — is each one ATTRIBUTION (short italic name 1-5 words) or INSTRUCTIONS (longer italic prose)? Short author names like "Sidney Greenberg (Adapted)" or "Chaim Stern" are ALWAYS attribution.
+11. Did you see any decorative ornaments (curly flourishes, fleurons, swirls) between readings? Emit a divider element for each one.
+12. Italic exceptions — be CONSERVATIVE about marking non-italic, but THOROUGH within paragraphs that use the markup. Scan each italic paragraph for transliterated Hebrew terms (Kabbalat Hashanah, Yamim Nora'im, sheliaḥ tzibur, ma'ariv, shaḥarit, minḥah, Aleinu, Amidah, Kaddish, etc.). If you find ANY, switch to <i>...</i> markup and leave EVERY such term non-italic — not just some. NEVER mark English page references, numbers, dates, or ordinary English words as non-italic. When in doubt about a non-Hebrew word, leave it italic.
+14. Bold markup: did you wrap visually bold text in <b>...</b> tags? Did you avoid using any other HTML-style tags like <u>, <em>, <strong>, <span>? Only <i> and <b> are valid.
+13. Did you transcribe exactly what is in the image, or did you "correct" anything? Go back and verify: each Hebrew letter, each nikkud mark, each English word matches what is visually on the page. If a word looks unusual or "wrong", that is what you must transcribe.
 
 Return ONLY the XML block.`,
   },
@@ -271,6 +334,16 @@ async function loadPdfJs() {
   return window.pdfjsLib;
 }
 
+async function loadPdfLib() {
+  if (window.PDFLib) return window.PDFLib;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js";
+    s.onload = resolve; s.onerror = () => reject(new Error("Failed to load pdf-lib")); document.head.appendChild(s);
+  });
+  return window.PDFLib;
+}
+
 async function pdfToImages(file) {
   const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
@@ -301,29 +374,88 @@ function reorderElements(elements) {
     if (!buf.length) return;
     const groups = []; let cur = [];
     for (const el of buf) {
-      if (el.type === "hebrew_liturgy" && cur.some(e => e.type === "hebrew_liturgy")) { groups.push(cur); cur = [el]; }
-      else cur.push(el);
+      if (el.type === "hebrew_liturgy") {
+        if (cur.length) {
+          // Check if the pending group has any translations
+          const hasTranslation = cur.some(e => e.type === "translation");
+          if (hasTranslation) {
+            // Standalone translations before Hebrew — protect from reordering
+            groups.push({ items: cur, hasHebrew: false });
+            cur = [el];
+          } else {
+            // Only transliterations before Hebrew — merge (they belong with it)
+            cur.push(el);
+          }
+        } else { cur.push(el); }
+      } else { cur.push(el); }
     }
-    if (cur.length) groups.push(cur);
-    for (const g of groups) { g.sort((a, b) => (LITURGICAL_ORDER[a.type] ?? 99) - (LITURGICAL_ORDER[b.type] ?? 99)); for (const el of g) result.push(el); }
+    if (cur.length) groups.push({ items: cur, hasHebrew: cur.some(e => e.type === "hebrew_liturgy") });
+    // Only sort groups that contain Hebrew — standalone translation runs stay in place
+    for (const g of groups) {
+      if (g.hasHebrew) g.items.sort((a, b) => (LITURGICAL_ORDER[a.type] ?? 99) - (LITURGICAL_ORDER[b.type] ?? 99));
+      for (const el of g.items) result.push(el);
+    }
     buf = [];
   }
   for (const el of elements) { if (LITURGICAL_TYPES.has(el.type)) buf.push(el); else { flush(); result.push(el); } }
   flush(); return result;
 }
 
-function stripLatinDiacritics(t) { return t.replace(/[\u0304\u0306\u0307\u0323\u0330\u0331\u0332]/g, ""); }
+function stripLatinDiacritics(t) {
+  /* NFC-normalize first so any decomposed "h" + U+0323 collapses to the
+     precomposed \u1e25 (U+1E25) / \u1e24 (U+1E24) before stripping. We deliberately
+     do NOT strip U+0323 (combining dot below) \u2014 Kol Haneshamah uses dotted-h
+     for chet, and the dot must be preserved on any letter where it appears. */
+  return t.normalize("NFC").replace(/[\u0304\u0306\u0307\u0330\u0331\u0332]/g, "");
+}
 
-function parseItalicSpans(raw) {
-  const spans = []; const re = /<i>([\s\S]*?)<\/i>/g; let last = 0, m;
-  while ((m = re.exec(raw)) !== null) {
-    if (m.index > last) spans.push({ text: raw.slice(last, m.index), italic: false });
-    spans.push({ text: m[1], italic: true }); last = re.lastIndex;
+/* Repair aberrant AI character substitutions in transliteration text.
+   The model sometimes emits unusual Latin-extended characters in place of the
+   standard dotted-h \u1e25 (U+1E25) / \u1e24 (U+1E24). Most commonly it pairs "h" with
+   a stray letter that visually has a hook or dot. Normalize these back to \u1e25/\u1e24.
+   Also strips any remaining isolated occurrences of these aberrant characters. */
+function repairTransliteration(t) {
+  /* h followed by U+A794 (\ua794, Latin small c with palatal hook) \u2192 \u1e25 */
+  t = t.replace(/h\ua794/g, "\u1e25");
+  t = t.replace(/H\ua794/g, "\u1e24");
+  /* h followed by U+0117 (\u0117, e with dot above) \u2192 \u1e25 \u2014 and uppercase variant U+0116 (\u0116) */
+  t = t.replace(/h\u0117/g, "\u1e25");
+  t = t.replace(/H\u0116/g, "\u1e24");
+  /* h followed by U+1E0B (\u1e0b, d with dot above) \u2192 \u1e25 (rare but seen) */
+  t = t.replace(/h\u1e0b/g, "\u1e25");
+  t = t.replace(/H\u1e0a/g, "\u1e24");
+  /* Drop any remaining isolated occurrences of these characters \u2014 they have no
+     legitimate use in Hebrew transliteration. */
+  t = t.replace(/[\ua794\u0117\u0116\u1e0b\u1e0a]/g, "");
+  return t;
+}
+
+/* Parse italic <i> and bold <b> tags (independently — they may overlap or nest).
+   Returns spans of {text, italic, bold} reflecting state at each segment of the text. */
+function parseRichSpans(raw) {
+  const spans = [];
+  let italic = false, bold = false, buf = "", i = 0;
+  const flush = () => { if (buf) { spans.push({ text: buf, italic, bold }); buf = ""; } };
+  while (i < raw.length) {
+    if (raw[i] === "<") {
+      const close = raw.indexOf(">", i);
+      if (close > i) {
+        const tag = raw.slice(i, close + 1).toLowerCase();
+        if (tag === "<i>")   { flush(); italic = true;  i = close + 1; continue; }
+        if (tag === "</i>")  { flush(); italic = false; i = close + 1; continue; }
+        if (tag === "<b>")   { flush(); bold = true;    i = close + 1; continue; }
+        if (tag === "</b>")  { flush(); bold = false;   i = close + 1; continue; }
+      }
+    }
+    buf += raw[i]; i++;
   }
-  if (last < raw.length) spans.push({ text: raw.slice(last), italic: false });
-  if (!spans.length) spans.push({ text: raw, italic: false });
+  flush();
+  if (!spans.length) spans.push({ text: raw, italic: false, bold: false });
   return spans;
 }
+
+/* Backwards-compat alias — some callers may still reference parseItalicSpans. */
+const parseItalicSpans = parseRichSpans;
 
 function parseElementsXml(text, layoutId) {
   const match = text.match(/<elements>([\s\S]*?)<\/elements>/);
@@ -333,7 +465,15 @@ function parseElementsXml(text, layoutId) {
     let t = m[3].replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").trim();
     /* Strip arrow characters */
     t = t.replace(/[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B73\u25B6\u25C0\u25BA\u25C4\u27F6]/g, "").trim();
-    if (m[1] === "transliteration" && layoutId === "kol_haneshamah") t = stripLatinDiacritics(t);
+    if (layoutId === "kol_haneshamah") {
+      if (m[1] === "transliteration") t = stripLatinDiacritics(t);
+      /* Repair aberrant ḥ-substitution characters in any English text — the AI's
+         weird character substitution can show up in translations, footnotes, etc.
+         when they contain transliterated Hebrew terms (like "Nevareḥ"). */
+      if (["transliteration","translation","footnote","attribution","instructions"].includes(m[1])) {
+        t = repairTransliteration(t);
+      }
+    }
     els.push({ type: m[1], order: parseInt(m[2],10), text: t });
   }
   if (!els.length) throw new Error("No elements parsed");
@@ -341,10 +481,10 @@ function parseElementsXml(text, layoutId) {
   return { elements: reorderElements(els) };
 }
 
-async function detectLayout(base64Image, apiKey) {
+async function detectLayout(base64Image) {
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300,
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, temperature: 0,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } }, { type: "text", text: LAYOUT_DETECTION_PROMPT }] }] }),
     });
     if (!r.ok) return { layout_id: "other", confidence: 0, reasoning: "API error", usage: null };
@@ -358,23 +498,23 @@ async function detectLayout(base64Image, apiKey) {
 function isContentFilterError(b) { return typeof b === "string" && b.includes("content filtering policy"); }
 function isRateLimitError(s, b) { return s === 429 || (typeof b === "string" && b.includes("rate_limit")); }
 
-async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, apiKey, attempt = 1, maxAttempts = 3) {
+async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 1) {
   let response;
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4096, system: systemPrompt,
+    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4096, temperature: 0, system: systemPrompt,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } },
           { type: "text", text: "Analyze this siddur page. Extract text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML." }] }] }),
     });
   } catch (err) {
-    if (attempt < maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, apiKey, attempt+1, maxAttempts); }
+    if (attempt < maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt+1, maxAttempts); }
     throw new Error("Network error: "+err.message);
   }
   if (!response.ok) {
     const body = await response.text().catch(()=>"unknown");
-    if (response.status===400 && isContentFilterError(body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); } let detail=""; try { const j=JSON.parse(body); detail=j.error?.message||""; } catch(_){} throw new Error("CONTENT_FILTER: Blocked after "+attempt+" attempts."+(detail?" Detail: "+detail:"")); }
-    if (isRateLimitError(response.status,body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,5000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); } throw new Error("RATE_LIMIT: Exceeded after "+attempt+" attempts."); }
-    if (response.status>=500 && attempt<maxAttempts) { await new Promise(r=>setTimeout(r,3000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); }
+    if (response.status===400 && isContentFilterError(body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); } let detail=""; try { const j=JSON.parse(body); detail=j.error?.message||""; } catch(_){} throw new Error("CONTENT_FILTER: Blocked after "+attempt+" attempts."+(detail?" Detail: "+detail:"")); }
+    if (isRateLimitError(response.status,body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,5000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); } throw new Error("RATE_LIMIT: Exceeded after "+attempt+" attempts."); }
+    if (response.status>=500 && attempt<maxAttempts) { await new Promise(r=>setTimeout(r,3000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); }
     throw new Error("API HTTP "+response.status+": "+body);
   }
   const data = await response.json();
@@ -384,9 +524,70 @@ async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, apiKey
     const parsed = parseElementsXml(text, layoutId);
     return { ...parsed, usage: data.usage || null };
   } catch (parseErr) {
-    if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,1000)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,apiKey,attempt+1,maxAttempts); }
+    if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,1000)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); }
     throw new Error("Parse failed after "+attempt+" attempts: "+parseErr.message);
   }
+}
+
+/* ─── Split-Page Fallback for Content Filter ─── */
+
+async function cropImage(base64, topPct, bottomPct) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const cropTop = Math.floor(img.height * topPct);
+      const cropBottom = Math.floor(img.height * bottomPct);
+      const cropHeight = cropBottom - cropTop;
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = cropHeight;
+      canvas.getContext("2d").drawImage(img, 0, cropTop, img.width, cropHeight, 0, 0, img.width, cropHeight);
+      resolve(canvas.toDataURL("image/png").split(",")[1]);
+    };
+    img.src = "data:image/png;base64," + base64;
+  });
+}
+
+async function splitPageAnalyze(base64Image, systemPrompt, layoutId) {
+  const topHalf = await cropImage(base64Image, 0, 0.55);
+  const bottomHalf = await cropImage(base64Image, 0.45, 1.0);
+  const topNote = "\n\nNOTE: This image is the TOP PORTION of a page (cropped). Extract whatever content is visible. Do not worry about content cut off at the bottom edge. Return elements for what you can see.";
+  const bottomNote = "\n\nNOTE: This image is the BOTTOM PORTION of a page (cropped). Extract whatever content is visible. Do not worry about content cut off at the top edge. Return elements for what you can see. IMPORTANT: Any text below a horizontal rule or dividing line is a FOOTNOTE — tag it as <footnote>, not as translation or other types.";
+  const topResult = await analyzePageWithClaude(topHalf, systemPrompt + topNote, layoutId);
+  const bottomResult = await analyzePageWithClaude(bottomHalf, systemPrompt + bottomNote, layoutId);
+
+  /* Merge elements, deduplicating the overlap zone.
+     The top/bottom halves overlap by ~10% of the page, so some elements appear in both.
+     Use aggressive text normalization: lowercase, strip Hebrew combining marks,
+     collapse whitespace, then compare word sets for similarity. */
+  const stripMarks = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f\u0591-\u05C7]/g,"").normalize("NFC");
+  const norm = s => stripMarks(s).toLowerCase().replace(/[''"""]/g,"").replace(/\s+/g," ").trim();
+  const wordSet = s => { const w = norm(s).split(" ").filter(x=>x.length>2); return new Set(w); };
+  const similarity = (a, b) => {
+    const wa = wordSet(a), wb = wordSet(b);
+    if (wa.size < 2 || wb.size < 2) return norm(a) === norm(b) ? 1 : 0;
+    let overlap = 0; for (const w of wa) if (wb.has(w)) overlap++;
+    return overlap / Math.min(wa.size, wb.size);
+  };
+
+  const topEls = topResult.elements || [];
+  const bottomEls = bottomResult.elements || [];
+  const merged = [...topEls];
+
+  for (const bEl of bottomEls) {
+    let isDupe = false;
+    /* Check against last ~8 elements from top (overlap zone) */
+    const checkRange = topEls.slice(Math.max(0, topEls.length - 8));
+    for (const tEl of checkRange) {
+      if (similarity(tEl.text, bEl.text) > 0.6) { isDupe = true; break; }
+    }
+    if (!isDupe) merged.push(bEl);
+  }
+
+  /* Combine usage */
+  const usage = { input_tokens: (topResult.usage?.input_tokens||0) + (bottomResult.usage?.input_tokens||0),
+                  output_tokens: (topResult.usage?.output_tokens||0) + (bottomResult.usage?.output_tokens||0) };
+  return { elements: merged, usage };
 }
 
 /* ─── Kol Haneshamah Post-Processing ─── */
@@ -410,81 +611,136 @@ function postProcessKolHaneshamah(pages) {
 
   for (const p of pages) {
     if (p.skipped) continue;
-    const els = p.elements||[], hdrs = [];
+    let els = p.elements || [];
 
-    /* Split compound headers — both "NAME / NUMBER" and "NUMBER / NAME" patterns.
-       Handle regular slash (/), fraction slash (⁄), division slash (∕), fullwidth slash (／) */
+    /* Compound footer/header regexes. Handle regular slash (/), fraction slash (⁄),
+       division slash (∕), fullwidth slash (／) */
     const slashPat = '[/\u2044\u2215\uFF0F]';
-    const nameThenNum = new RegExp('^(.+?)\\s*' + slashPat + '\\s*(\\d+)$');
-    const numThenName = new RegExp('^(\\d+)\\s*' + slashPat + '\\s*(.+)$');
-    for (let i=els.length-1; i>=0; i--) {
-      const el = els[i], t = (el.text||"").trim();
-      if (!(el.type==="section_header" || el.type==="page_number" || el.type==="header")) continue;
+    const nameThenNum = new RegExp('^(.+?)\\s*' + slashPat + '\\s*(\\d+)\\s*$');
+    const numThenName = new RegExp('^\\s*(\\d+)\\s*' + slashPat + '\\s*(.+?)\\s*$');
+    /* Element types that might carry a compound "NAME / NUMBER" or "NUMBER / NAME" footer.
+       Scan ALL of these defensively — the AI sometimes mislabels the footer as any of them. */
+    const compoundEligibleTypes = new Set([
+      "section_header", "page_number", "header",
+      "bottom_section_name", "bottom_service_name"
+    ]);
 
-      /* Pattern 1: "NAME / NUMBER" (e.g., "MEDITATIONS / 9") */
-      const nameFirst = t.match(nameThenNum);
-      if (nameFirst) {
-        els[i] = {type:"section_header", text:nameFirst[1].trim(), order:el.order};
-        els.push({type:"page_number", text:nameFirst[2].trim(), order:9999});
-        p.pageNumber = nameFirst[2].trim();
-        continue;
+    /* Step 1: Defensive compound-footer scan. Extract name + number from any element
+       whose text matches the compound pattern, then drop the element entirely.
+       Take the LAST occurrence's values (the footer is at the bottom of the page). */
+    let extractedName = null;
+    let extractedNumber = null;
+    els = els.filter(el => {
+      if (!compoundEligibleTypes.has(el.type)) return true;
+      const t = (el.text || "").trim();
+      if (!t) return true;
+      let m = t.match(nameThenNum);
+      if (m) {
+        extractedName = m[1].trim();
+        extractedNumber = m[2].trim();
+        return false; /* drop this compound element */
       }
-
-      /* Pattern 2: "NUMBER / NAME" (e.g., "128 / MEDITATIONS") */
-      const numFirst = t.match(numThenName);
-      if (numFirst) {
-        els[i] = {type:"section_header", text:numFirst[2].trim(), order:el.order};
-        continue;
+      m = t.match(numThenName);
+      if (m) {
+        extractedNumber = m[1].trim();
+        extractedName = m[2].trim();
+        return false;
       }
-    }
+      return true;
+    });
 
-    /* Fallback: clean up any section_headers that still have number/separator patterns */
-    for (let i=0; i<els.length; i++) {
-      if (els[i].type !== "section_header") continue;
-      els[i].text = cleanHeaderText(els[i].text);
-    }
+    /* Step 2: For remaining bottom_section_name / bottom_service_name elements (without
+       compound pattern), use their cleaned text as a header-name candidate, then drop. */
+    const headerNameTypes = new Set(["bottom_section_name", "bottom_service_name"]);
+    els = els.filter(el => {
+      if (!headerNameTypes.has(el.type)) return true;
+      const cleaned = cleanHeaderText(el.text || "").trim();
+      if (cleaned && !extractedName) extractedName = cleaned;
+      return false;
+    });
 
-    /* Fix compound pageNumber */
-    if (p.pageNumber) {
-      const pnMatch = (p.pageNumber+"").match(/^.+?\/\s*(\d+)$/);
-      if (pnMatch) p.pageNumber = pnMatch[1].trim();
-      const pnMatch2 = (p.pageNumber+"").match(/^(\d+)\s*\/\s*.+$/);
-      if (pnMatch2) p.pageNumber = pnMatch2[1].trim();
-    }
-
-    /* Deduplicate only RUNNING HEADERS (the first section_header on each page).
-       Content sub-headers like "TRADITIONAL VERSION" that appear later on the page are kept. */
-    let foundFirstHeader = false;
-    for (let i=0; i<els.length; i++) {
-      if (els[i].type==="section_header") {
-        if (!foundFirstHeader) {
-          foundFirstHeader = true;
-          const nk = normalizeHeader(els[i].text);
-          if (seenHeaders.has(nk)) {
-            els.splice(i,1); i--;
-          } else {
-            seenHeaders.add(nk);
-          }
+    /* Step 3: Determine the page number. Priority: compound-extracted number > first
+       clean numeric page_number element > prior value. */
+    if (extractedNumber) {
+      p.pageNumber = extractedNumber;
+    } else {
+      for (const el of els) {
+        if (el.type === "page_number") {
+          const t = (el.text + "").trim();
+          if (/^\d+$/.test(t)) { p.pageNumber = t; break; }
         }
       }
     }
 
-    /* Promote bottom_section_name / bottom_service_name to section_header.
-       CLEAN the text first (strip page numbers), then dedup against global set. */
-    for (let i=els.length-1; i>=0; i--) {
-      if (els[i].type==="bottom_section_name" && els[i].text.trim()) {
-        const n=cleanHeaderText(els[i].text), nk=normalizeHeader(n);
-        if (!seenHeaders.has(nk) && n) { seenHeaders.add(nk); hdrs.push({type:"section_header",text:n,order:-2}); }
-        els.splice(i,1);
-      } else if (els[i].type==="bottom_service_name" && els[i].text.trim()) {
-        const n=cleanHeaderText(els[i].text), nk=normalizeHeader(n);
-        if (!seenHeaders.has(nk) && n) { seenHeaders.add(nk); hdrs.push({type:"section_header",text:n,order:-1}); }
-        els.splice(i,1);
+    /* Step 4: Remove ALL page_number elements from the body — the page number renders
+       via p.pageNumber at the bottom of the page in buildDocx. */
+    els = els.filter(el => el.type !== "page_number");
+
+    /* Step 5: Clean any remaining section_headers (strip stray number/separator patterns). */
+    for (let i = 0; i < els.length; i++) {
+      if (els[i].type === "section_header") els[i].text = cleanHeaderText(els[i].text);
+    }
+
+    /* Step 5.5: Drop "footer-style" section_headers from the body. A footer-style header
+       is a section_header element that has NO post-content content after it (i.e., the AI
+       placed it at the bottom of the page where a running header would appear in the
+       printed source). Use its text as a header-name candidate if we don't already have
+       one. Mid-page section_headers (those followed by readings/translations/etc.) are
+       kept in place — they're legitimate sub-section markers. */
+    const postContentTypes = new Set([
+      "hebrew_liturgy", "transliteration", "translation", "attribution",
+      "hebrew_header", "hebrew_section_header", "instructions", "footnote"
+    ]);
+    els = els.filter((el, i, arr) => {
+      if (el.type !== "section_header") return true;
+      let hasContentAfter = false;
+      for (let j = i + 1; j < arr.length; j++) {
+        if (postContentTypes.has(arr[j].type)) { hasContentAfter = true; break; }
+      }
+      if (hasContentAfter) return true; /* mid-page, keep */
+      /* footer-style: drop, but capture as header candidate if we don't have one */
+      if (!extractedName) extractedName = el.text;
+      return false;
+    });
+
+    /* Step 6: If we have a header name (from compound match, bottom_*_name, or footer-style
+       section_header), insert it at the TOP of the page as a section_header. Dedup in Step 7. */
+    if (extractedName) {
+      els.unshift({ type: "section_header", text: extractedName, order: -1 });
+    }
+
+    /* Step 7: Dedup ALL section_headers on this page against the global seenHeaders.
+       First occurrence (in document order across all pages) is kept; subsequent
+       duplicates — same-page or cross-page — are dropped. normalizeHeader compares
+       case-insensitively, so "Rosh Hashanah Eve" and "ROSH HASHANAH EVE" dedup as
+       the same key (first one wins). */
+    for (let i = 0; i < els.length; i++) {
+      if (els[i].type !== "section_header") continue;
+      const nk = normalizeHeader(els[i].text);
+      if (seenHeaders.has(nk)) {
+        els.splice(i, 1); i--;
+      } else {
+        seenHeaders.add(nk);
       }
     }
 
-    hdrs.sort((a,b)=>a.order-b.order);
-    for (let h=hdrs.length-1; h>=0; h--) els.unshift(hdrs[h]);
+    /* Step 8: Remove trailing dividers — any `divider` element that has no content
+       element after it on this page. Mid-page dividers (between readings) are kept;
+       they render as extra spacing in buildDocx. */
+    const contentTypes = new Set([
+      "hebrew_liturgy", "transliteration", "translation", "attribution",
+      "hebrew_header", "hebrew_section_header", "section_header", "instructions", "footnote"
+    ]);
+    let lastContentIdx = -1;
+    for (let i = els.length - 1; i >= 0; i--) {
+      if (contentTypes.has(els[i].type)) { lastContentIdx = i; break; }
+    }
+    if (lastContentIdx < 0) {
+      els = els.filter(el => el.type !== "divider");
+    } else {
+      els = els.filter((el, i) => !(el.type === "divider" && i > lastContentIdx));
+    }
+
     p.elements = els;
   }
   return pages;
@@ -521,9 +777,20 @@ function normalizeLeadingCaps(text) {
   return head + tail;
 }
 
-function makeTextRuns(text, font, size, extra={}) {
+function makeTextRuns(text, font, size, extra={}, opts={}) {
   const { TextRun } = window.docx;
-  return parseItalicSpans(text).map(s => new TextRun({ text: s.text, font, size, ...extra, ...(s.italic ? {italics:true} : {}) }));
+  const defaultItalic = !!opts.defaultItalic;
+  const hasItalicTags = /<i>/.test(text);
+  /* Italic semantics:
+     - defaultItalic=false (translation, footnote): italic ONLY where <i>-marked.
+     - defaultItalic=true (instructions, attribution): italic by default. <i> tags
+       flip to mixed mode where italic appears ONLY where marked.
+     Bold is always orthogonal: bold ONLY where <b>-marked. */
+  return parseRichSpans(text).map(s => {
+    const italic = !defaultItalic ? !!s.italic
+                                   : (hasItalicTags ? !!s.italic : true);
+    return new TextRun({ text: s.text, font, size, ...extra, italics: italic, bold: !!s.bold });
+  });
 }
 
 function buildDocx(allPages, footnotes, fontSize, layoutId) {
@@ -537,7 +804,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
     if (pg.skipped) { ch.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{before:400,after:200},children:[new TextRun({text:"[Page "+pg.sourcePageIndex+" skipped: "+(pg.skipReason||"error")+"]",font:T,size:is,italics:true,color:"996633"})]})); if(pi<allPages.length-1) ch.push(new Paragraph({children:[new PageBreak()]})); continue; }
     let ei=0, prevType="";
     for (const el of pg.elements||[]) {
-      if (["navigation","header","footnote","page_number","bottom_section_name","bottom_service_name"].includes(el.type)) { ei++; continue; }
+      if (["navigation","header","page_number","bottom_section_name","bottom_service_name"].includes(el.type)) { ei++; continue; }
 
       /* Extra spacing before a new liturgical block that follows a reading/attribution */
       if ((el.type==="hebrew_liturgy"||el.type==="hebrew_header") && (prevType==="translation"||prevType==="attribution")) {
@@ -583,35 +850,32 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
           }
         }
       } else if (el.type==="attribution") {
-        ch.push(new Paragraph({style:"Attribution",alignment:AlignmentType.RIGHT,spacing:{before:120,after:360},children:[new TextRun({text:el.text,font:T,size:is,italics:true})]}));
+        /* Attribution: right-aligned italic by default. <i> tags flip to mixed mode
+           (italic only where marked). <b> tags add bold where marked. */
+        ch.push(new Paragraph({style:"Attribution",alignment:AlignmentType.RIGHT,spacing:{before:120,after:360},children:makeTextRuns(el.text,T,is,{},{defaultItalic:true})}));
       } else if (el.type==="instructions") {
-        /* Instructions: left-aligned, italic by default, but preserve <i> markup for mixed italic/non-italic */
-        const hasItalicTags = /<i>/.test(el.text);
-        if (hasItalicTags) {
-          /* Mixed content: non-italic is default, <i> marks italic portions */
-          ch.push(new Paragraph({style:"Instructions",spacing:{before:p12,after:p12},children:makeTextRuns(el.text,T,is)}));
-        } else {
-          /* Fully italic (no tags) */
-          ch.push(new Paragraph({style:"Instructions",spacing:{before:p12,after:p12},children:[new TextRun({text:el.text,font:T,size:is,italics:true})]}));
+        /* Instructions: left-aligned italic by default. <i> tags flip to mixed mode
+           (italic only where marked). <b> tags add bold where marked. */
+        ch.push(new Paragraph({style:"Instructions",spacing:{before:p12,after:p12},children:makeTextRuns(el.text,T,is,{},{defaultItalic:true})}));
+      } else if (el.type==="footnote") {
+        /* Footnote: rendered in-place at the element's original position. Small font,
+           italic-tag aware via makeTextRuns. No horizontal rule — the smaller font is
+           the visual cue. Split on double-newlines for multi-paragraph footnotes. */
+        for (const fp of (el.text||"").split(/\n\s*\n/)) {
+          const t = fp.replace(/\n/g," ").trim();
+          if (t) ch.push(new Paragraph({spacing:{before:120,after:120},children:makeTextRuns(t,T,fs)}));
         }
+      } else if (el.type==="divider") {
+        /* Divider: a decorative ornament between two readings. Render as extra blank
+           paragraph spacing — no text. Trailing dividers (those just before the page
+           footer) were already removed in postProcessKolHaneshamah. */
+        ch.push(new Paragraph({spacing:{before:240,after:240},children:[new TextRun({text:"",font:T,size:ms})]}));
       }
       prevType=el.type;
       ei++;
     }
     if (pg.pageNumber) ch.push(new Paragraph({style:"PageNumber",children:[new TextRun({text:pg.pageNumber,font:T,size:ms})]}));
     if (pi<allPages.length-1) ch.push(new Paragraph({children:[new PageBreak()]}));
-  }
-
-  if (footnotes.length) {
-    ch.push(new Paragraph({children:[new PageBreak()]}));
-    ch.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:300},children:[new TextRun({text:"Footnotes",font:T,size:hs,bold:true})]}));
-    ch.push(new Paragraph({border:{bottom:{style:BorderStyle.SINGLE,size:6,color:"999999"}},spacing:{after:200},children:[]}));
-    const gr={}; for (const fn of footnotes) { if(!gr[fn.sourcePage]) gr[fn.sourcePage]=[]; gr[fn.sourcePage].push(fn.text); }
-    for (const [pg,txts] of Object.entries(gr)) {
-      ch.push(new Paragraph({spacing:{after:0},children:[]}));
-      ch.push(new Paragraph({alignment:AlignmentType.LEFT,spacing:{before:200,after:120},children:[new TextRun({text:"Page "+pg,font:T,size:is,bold:true,color:"555555"})]}));
-      for (const txt of txts) for (const fp of txt.split(/\n\s*\n/)) { const t=fp.replace(/\n/g," ").trim(); if(t) ch.push(new Paragraph({spacing:{after:120},children:makeTextRuns(t,T,fs)})); }
-    }
   }
 
   return new Document({
@@ -764,7 +1028,7 @@ function ProgressBar({current,total,status}) {
 
 function ResultsSummary({allPages,layoutName,skippedPages}) {
   const c={}; for (const p of allPages) { if(p.skipped) continue; for (const e of p.elements||[]) c[e.type]=(c[e.type]||0)+1; }
-  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",hebrew_section_header:"Hebrew Section Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
+  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",hebrew_section_header:"Hebrew Section Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",divider:"Dividers",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
   return (
     <div style={{background:"rgba(200,164,78,0.08)",borderRadius:12,padding:"16px 20px",margin:"16px 0"}}>
       <div style={{fontSize:14,fontWeight:700,color:"#2a2518",marginBottom:4}}>Elements Identified</div>
@@ -790,7 +1054,6 @@ function SiddurOCRApp() {
   const [actualUsage,setActualUsage]=useState({inputTokens:0,outputTokens:0});
   const [autoStartCount,setAutoStartCount]=useState(-1);
   const [timerCancelled,setTimerCancelled]=useState(false);
-  const [apiKey,setApiKey]=useState("");
   const timerRef=useRef(null);
 
   /* Auto-start countdown: begins when status becomes "ready" */
@@ -825,7 +1088,7 @@ function SiddurOCRApp() {
       let det = { layout_id: "other", confidence: 0, reasoning: "No pages available", usage: null };
       for (let p = 0; p < maxDetectPages; p++) {
         if (p > 0) setStatusText(`Identifying siddur layout (page ${p + 1} of ${maxDetectPages})\u2026`);
-        const attempt = await detectLayout(images[p].base64, apiKey);
+        const attempt = await detectLayout(images[p].base64);
         if (attempt.usage) setActualUsage(prev=>({inputTokens:prev.inputTokens+(attempt.usage.input_tokens||0),outputTokens:prev.outputTokens+(attempt.usage.output_tokens||0)}));
         if (attempt.layout_id && attempt.layout_id !== "other" && LAYOUTS[attempt.layout_id]) {
           det = attempt;
@@ -859,15 +1122,21 @@ function SiddurOCRApp() {
         try {
           let result;
           try {
-            result = await analyzePageWithClaude(pageImages[i].base64, sysPrompt, selectedLayout, apiKey);
+            result = await analyzePageWithClaude(pageImages[i].base64, sysPrompt, selectedLayout);
           } catch(firstErr) {
             if (firstErr.message.startsWith("CONTENT_FILTER:")) {
               /* Retry with instructions to skip sensitive content */
               setStatusText("Page "+(i+1)+": content filter hit, retrying with safe mode\u2026");
               const safePrompt = sysPrompt + "\n\nCONTENT SAFETY NOTE: A previous attempt to process this page was blocked by content filters. Please extract all text EXCEPT any content that might be considered sensitive or inappropriate. For any text you must omit, insert a placeholder: [content omitted due to filtering]. Extract everything else normally with full accuracy.";
               try {
-                result = await analyzePageWithClaude(pageImages[i].base64, safePrompt, selectedLayout, apiKey, 1, 2);
-              } catch(_) { throw firstErr; /* safe mode also failed, throw original error */ }
+                result = await analyzePageWithClaude(pageImages[i].base64, safePrompt, selectedLayout, 1, 1);
+              } catch(safeErr) {
+                /* Safe mode also failed — try split-page mode */
+                setStatusText("Page "+(i+1)+": safe mode failed, trying split-page mode\u2026");
+                try {
+                  result = await splitPageAnalyze(pageImages[i].base64, sysPrompt, selectedLayout);
+                } catch(_) { throw firstErr; /* all three modes failed, throw original error */ }
+              }
             } else {
               throw firstErr;
             }
@@ -875,7 +1144,8 @@ function SiddurOCRApp() {
           const els=result.elements||[];
           const pnEl=els.find(e=>e.type==="page_number");
           const pn=pnEl?pnEl.text:String(i+1);
-          for (const fn of els.filter(e=>e.type==="footnote")) allFn.push({sourcePage:pn,text:fn.text});
+          /* Footnotes are rendered inline per-page from pg.elements in buildDocx;
+             no separate collection needed. */
           pages.push({pageNumber:pn,elements:els,sourcePageIndex:i+1});
           // Accumulate actual usage
           if (result.usage) setActualUsage(prev=>({inputTokens:prev.inputTokens+(result.usage.input_tokens||0),outputTokens:prev.outputTokens+(result.usage.output_tokens||0)}));
@@ -908,6 +1178,25 @@ function SiddurOCRApp() {
     a.style.display="none"; document.body.appendChild(a); a.click();
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u)},1000);
   },[docBlob,file]);
+
+  const exportSkippedPDF = useCallback(async ()=>{
+    if (!file || !skippedPages.length) return;
+    try {
+      const PDFLib = await loadPdfLib();
+      const srcBytes = await file.arrayBuffer();
+      const srcPdf = await PDFLib.PDFDocument.load(srcBytes);
+      const newPdf = await PDFLib.PDFDocument.create();
+      const pageIndices = skippedPages.map(s => s.sourcePageIndex - 1);
+      const copiedPages = await newPdf.copyPages(srcPdf, pageIndices);
+      for (const pg of copiedPages) newPdf.addPage(pg);
+      const pdfBytes = await newPdf.save();
+      const blob = new Blob([pdfBytes], {type:"application/pdf"});
+      const u = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = u; a.download = (file?file.name.replace(/\.pdf$/i,""):"siddur") + "_skipped.pdf";
+      a.style.display = "none"; document.body.appendChild(a); a.click();
+      setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u)},1000);
+    } catch(e) { console.error("Failed to export skipped pages:",e); }
+  },[file,skippedPages]);
 
   /* Auto-trigger: when countdown hits 0 and status is still ready, start processing */
   useEffect(()=>{
@@ -990,6 +1279,7 @@ function SiddurOCRApp() {
         {status==="done"&&allPages.length>0&&<>
           <ResultsSummary allPages={allPages} layoutName={LAYOUTS[selectedLayout]?.name} skippedPages={skippedPages} />
           <button onClick={downloadDocx} style={{width:"100%",padding:"16px 24px",fontSize:17,fontWeight:600,color:"#fff",background:"linear-gradient(135deg,#a07830,#c8a44e)",border:"none",borderRadius:12,cursor:"pointer",marginTop:8,fontFamily:"'Georgia',serif",letterSpacing:0.5,boxShadow:"0 4px 16px rgba(160,120,48,0.3)"}}>⬇ Download Word Document</button>
+          {skippedPages.length>0 && <button onClick={exportSkippedPDF} style={{width:"100%",padding:"12px 24px",fontSize:14,fontWeight:600,color:"#7a5020",background:"#fef7ed",border:"1px solid #f5d0a0",borderRadius:10,cursor:"pointer",marginTop:8,fontFamily:"'Georgia',serif"}}>⬇ Export {skippedPages.length} Skipped Page{skippedPages.length>1?"s":""} as PDF</button>}
         </>}
 
         {status==="idle" && <div style={{marginTop:40,color:"#8a8070",fontSize:13,lineHeight:1.8}}>
@@ -998,12 +1288,13 @@ function SiddurOCRApp() {
           <div><strong style={{color:"#a07830"}}>2.</strong> AI auto-detects the siddur layout (you can override).</div>
           <div><strong style={{color:"#a07830"}}>3.</strong> Adjust font size, add notes, then hit <strong>Begin Processing</strong>.</div>
           <div><strong style={{color:"#a07830"}}>4.</strong> Each page is analyzed: Hebrew with nikkud, transliteration, translation, and more.</div>
-          <div><strong style={{color:"#a07830"}}>5.</strong> A Word document is generated with named paragraph styles and collected footnotes.</div>
+          <div><strong style={{color:"#a07830"}}>5.</strong> A Word document is generated with named paragraph styles and per-page footnotes.</div>
         </div>}
       </div>
     </div>
   );
 }
+
 
 
 ReactDOM.createRoot(document.getElementById("root")).render(<SiddurOCRApp />);
