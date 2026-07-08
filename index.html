@@ -80,7 +80,7 @@
 const { useState, useCallback, useRef, useEffect } = React;
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-07-08b build";
+const VERSION_STAMP = "v2026-07-08c build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -319,22 +319,22 @@ const LAYOUT_DETECTION_PROMPT = `Identify which siddur this page is from.
 
 Known layouts:
 1. "mishkan_tfilah" — Mishkan T'filah (CCAR Press, Reform movement). Identifiers (not all appear on every page):
-   - Hebrew liturgy on the RIGHT with transliteration in a parallel column on the LEFT
-   - Centered ALL CAPS section headers
-   - Double page numbers like "2 [120]" (spread number + bracketed print page)
-   - Left-hand pages often carry alternative English readings with author credits
+   - Hebrew liturgy on the RIGHT with transliteration in a parallel column on the LEFT (side-by-side columns)
+   - Centered ALL CAPS section headers; a navigation line across the top of the page
+   - Distinctive DOUBLE page numbers like "2 [120]" (spread number + bracketed print page)
    - Footnotes below a horizontal rule near the bottom
 
-2. "kol_haneshamah" — Kol Haneshamah (Reconstructionist Press). Identifiers (not all appear on every page):
-   - Hebrew in BLOCK paragraphs with full nikkud; transliteration in italic type directly BELOW the Hebrew block (stacked, NOT side-by-side columns)
-   - English translation as its own block, often with divine names set in SMALL CAPS (e.g., THE ETERNAL ONE, THE HOLY ONE, THE FAITHFUL ONE)
-   - Commentary at the bottom of the page BELOW a horizontal rule, frequently labeled COMMENTARY, NOTE, KAVANAH, or DERASH and often signed with author initials (e.g., "D.A.T.", "M.M.K.")
-   - Transliteration renders the letter chet as "h" with a dot beneath it (ḥ)
-   - Running footer: section name at bottom-left, service name at bottom-right (e.g., "128 / SHABBAT EVENING"); running headers in ALL CAPS
+2. "kol_haneshamah" — Kol Haneshamah (Reconstructionist Press). IMPORTANT: several volumes are FACING-PAGE editions — a single scanned page may be HEBREW-ONLY or ENGLISH-ONLY. Judge by the signatures below, not by expecting Hebrew and English together:
+   - Running footer in bold at the bottom: "184 / TORAH STUDY SECTION" or "BIRḤOT HASHAḤAR/MORNING BLESSINGS / 185" (page number + ALL CAPS section/service name, separated by "/")
+   - Section title rendered as a DECORATIVE BOXED/woodcut-style Hebrew word (framed or white-on-black art lettering), not plain type
+   - Commentary at the bottom BELOW a horizontal rule, labeled NOTE., COMMENTARY., KAVANAH., or DERASH., typically opening with a Hebrew citation followed by "/" and an English gloss, and signed with author initials (e.g., "J.R.", "A.G.", "D.A.T.")
+   - English translations in poetry-style short lines with divine names in SMALL CAPS (THE ETERNAL, THE KEEPER, THIS ONE, THE HOLY ONE, FOUNTAIN OF LIGHT), often with a small source attribution at the lower right of the block (e.g., "Psalm 33", "Genesis Rabbah 1.4")
+   - Hebrew liturgy in block paragraphs with full nikkud; transliteration (when present) sits below the Hebrew and renders chet as ḥ (dot below) or an underlined h
+   Any TWO of these signatures = kol_haneshamah with high confidence, even on a Hebrew-only or English-only page.
 
 3. "other" — Unknown or any other siddur.
 
-If the page is FRONT MATTER — a title page, copyright page, table of contents, dedication, preface, or blank page, with no actual Hebrew liturgy laid out on it — respond "other" with confidence 0.2 or lower and say "front matter" in the reasoning. Do NOT guess a siddur from front matter alone.
+If the page is FRONT MATTER — a title page, copyright page, table of contents, dedication, preface, or blank page — respond "other" with confidence 0.2 or lower and say "front matter" in the reasoning. A page of plain English readings or plain Hebrew with NONE of the signatures above is weak evidence: respond "other" with low confidence rather than guessing a known siddur.
 
 Respond with ONLY a JSON object:
 {"layout_id": "mishkan_tfilah" or "kol_haneshamah" or "other", "confidence": 0.0 to 1.0, "reasoning": "brief explanation"}`;
@@ -1280,30 +1280,37 @@ function SiddurOCRApp() {
       setPageImages(images); setProgress({current:0,total:totalPages});
       setStatusText("Identifying siddur layout\u2026");
       /* Pick candidate pages for layout detection. The opening pages of a scanned
-         siddur are often title/copyright/TOC pages with no identifiable liturgical
-         content, so start from the MIDDLE of the document (almost always actual
-         liturgy), then the 1/4 and 3/4 points, then fall back to the first pages
-         (which also covers short excerpt PDFs). Try up to 4 candidates. */
+         siddur are often title/copyright/TOC pages, so start from the MIDDLE of the
+         document. Facing-page editions (e.g. some Kol Haneshamah volumes) alternate
+         Hebrew-only and English-only pages, so sample an ADJACENT PAIR at the middle
+         to see both sides of a spread, then the 1/4 and 3/4 points, then page 1. */
       const N = images.length;
       const candidates = [...new Set(
-        [Math.floor(N/2), Math.floor(N/4), Math.floor((3*N)/4), 0, 1, 2]
+        [Math.floor(N/2), Math.floor(N/2)+1, Math.floor(N/4), Math.floor((3*N)/4), 0, 1]
           .map(i => Math.max(0, Math.min(i, N-1)))
       )];
-      const maxDetectPages = Math.min(4, candidates.length);
-      let det = { layout_id: "other", confidence: 0, reasoning: "No pages available", usage: null };
+      const maxDetectPages = Math.min(5, candidates.length);
+      /* Accept a known layout immediately only at high confidence; otherwise keep
+         scanning and fall back to the best guess seen. This stops one ambiguous page
+         (e.g. an all-English reading) from ending detection with a wrong answer. */
+      let det = null;
+      let bestKnown = null;
+      let bestOther = { layout_id: "other", confidence: 0, reasoning: "No pages available", usage: null };
       for (let a = 0; a < maxDetectPages; a++) {
         const p = candidates[a];
         setStatusText(`Identifying siddur layout (checking page ${p + 1}${a > 0 ? `, attempt ${a + 1} of ${maxDetectPages}` : ""})\u2026`);
         const attempt = await detectLayout(images[p].base64);
         if (attempt.usage) setActualUsage(prev=>({inputTokens:prev.inputTokens+(attempt.usage.input_tokens||0),outputTokens:prev.outputTokens+(attempt.usage.output_tokens||0)}));
-        if (attempt.layout_id && attempt.layout_id !== "other" && LAYOUTS[attempt.layout_id]) {
-          det = attempt;
-          det.reasoning = (det.reasoning || "") + ` (detected from page ${p + 1})`;
-          break;
+        const isKnown = attempt.layout_id && attempt.layout_id !== "other" && LAYOUTS[attempt.layout_id];
+        if (isKnown) {
+          attempt.reasoning = (attempt.reasoning || "") + ` (detected from page ${p + 1})`;
+          if ((attempt.confidence || 0) >= 0.7) { det = attempt; break; }
+          if (!bestKnown || (attempt.confidence || 0) > (bestKnown.confidence || 0)) bestKnown = attempt;
+        } else if ((attempt.confidence || 0) > bestOther.confidence) {
+          bestOther = attempt;
         }
-        /* Keep the best "other" result (highest confidence) as fallback */
-        if (attempt.confidence > det.confidence) det = attempt;
       }
+      if (!det) det = bestKnown || bestOther;
       const detId = det.layout_id && LAYOUTS[det.layout_id] ? det.layout_id : "other";
       setDetectedLayout(detId); setDetectionConfidence(det.confidence||0); setDetectionReasoning(det.reasoning||""); setSelectedLayout(detId);
       setStatus("ready"); setStatusText("Ready to process");
