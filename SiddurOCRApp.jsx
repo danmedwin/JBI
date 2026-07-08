@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-06-29 build";
+const VERSION_STAMP = "v2026-07-08b build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -94,7 +94,11 @@ CRITICAL: If you see any arrows in the text (curved, straight, or decorative —
 
 ITALIC PRESERVATION: When English text contains italic words or phrases, wrap the italic portions in <i>...</i> tags. Not for Hebrew or transliteration.
 
-BOLD PRESERVATION: When English text contains BOLD words or phrases (visually heavier weight than the surrounding text), wrap them in <b>...</b> tags. Apply to translations, instructions, attributions, footnotes — anywhere English text appears with bold formatting. Example: "Reader: <b>And there was evening, there was morning</b> — a single day." Bold and italic are orthogonal; both can apply to the same span (e.g., <b><i>bold italic phrase</i></b>). Do NOT use <b> tags on Hebrew or transliteration text. Do NOT invent bold where none exists in the source. NEVER emit other HTML-style markup tags (no <u>, no <em>, no <strong>, no <span>) — only <i> and <b> are supported.
+BOLD PRESERVATION: When English text contains BOLD words or phrases (visually heavier/blacker stroke weight than the surrounding text), wrap them in <b>...</b> tags. Apply to translations, instructions, attributions, footnotes — anywhere English text appears with bold formatting. Example: "Reader: <b>And there was evening, there was morning</b> — a single day." Bold and italic are orthogonal; both can apply to the same span (e.g., <b><i>bold italic phrase</i></b>). Do NOT use <b> tags on Hebrew or transliteration text. NEVER emit other HTML-style markup tags (no <u>, no <em>, no <strong>, no <span>) — only <i> and <b> are supported.
+
+BOLD IS NOT THE SAME AS SMALL CAPS: Text rendered in small-caps (visually all-uppercase but in a stylized small-caps font — common for section labels like "GUIDED MEDITATION", "COMMENTARY", "NOTE", "DERASH", "KAVANAH", or for divine-name styling like "THE ETERNAL ONE", "THE HOLY ONE", "MY GOD") is NOT bold. Small caps is a different typographic style that is already handled by the ALL CAPS rendering rules elsewhere in this prompt. Do NOT wrap small-caps text in <b> tags. Only use <b> when the text is visually a HEAVIER stroke weight than the surrounding non-bold text. If a phrase is in small caps, render it as ALL CAPS without any <b> tags.
+
+WHEN UNSURE ABOUT BOLD: prefer NOT marking bold. Genuine bold body text is relatively rare in printed prayer books — most "looks bold" cases are actually small caps or simply emphasis you should ignore. Inline bold in a translation paragraph is the typical legitimate case (e.g., a refrain that's set in bold). Section titles and sub-headers should be their own element type (section_header, hebrew_header), NOT inline bold inside another element.
 
 ITALIC EXCEPTIONS IN OTHERWISE-ITALIC PARAGRAPHS — be CONSERVATIVE: Instructions and attributions are normally entirely italic — in that default case, do NOT use any tags. ONLY switch to explicit <i>...</i> markup when the paragraph contains TRANSLITERATED HEBREW TERMS set in upright (non-italic) type to distinguish them from the surrounding italic English. When you DO use <i> markup, you MUST be thorough: every transliterated Hebrew term in the paragraph must be left non-italic. Missing one is a critical failure.
 
@@ -235,9 +239,23 @@ Return ONLY the XML block.`,
 const LAYOUT_DETECTION_PROMPT = `Identify which siddur this page is from.
 
 Known layouts:
-1. "mishkan_tfilah" — Mishkan T'filah (CCAR Press): Hebrew right, transliteration left in parallel columns, ALL CAPS headers centered, page numbers like "2 [120]"
-2. "kol_haneshamah" — Kol Haneshamah (Reconstructionist): Block Hebrew, transliteration below, section name at bottom-left, service name at bottom-right
-3. "other" — Unknown
+1. "mishkan_tfilah" — Mishkan T'filah (CCAR Press, Reform movement). Identifiers (not all appear on every page):
+   - Hebrew liturgy on the RIGHT with transliteration in a parallel column on the LEFT
+   - Centered ALL CAPS section headers
+   - Double page numbers like "2 [120]" (spread number + bracketed print page)
+   - Left-hand pages often carry alternative English readings with author credits
+   - Footnotes below a horizontal rule near the bottom
+
+2. "kol_haneshamah" — Kol Haneshamah (Reconstructionist Press). Identifiers (not all appear on every page):
+   - Hebrew in BLOCK paragraphs with full nikkud; transliteration in italic type directly BELOW the Hebrew block (stacked, NOT side-by-side columns)
+   - English translation as its own block, often with divine names set in SMALL CAPS (e.g., THE ETERNAL ONE, THE HOLY ONE, THE FAITHFUL ONE)
+   - Commentary at the bottom of the page BELOW a horizontal rule, frequently labeled COMMENTARY, NOTE, KAVANAH, or DERASH and often signed with author initials (e.g., "D.A.T.", "M.M.K.")
+   - Transliteration renders the letter chet as "h" with a dot beneath it (ḥ)
+   - Running footer: section name at bottom-left, service name at bottom-right (e.g., "128 / SHABBAT EVENING"); running headers in ALL CAPS
+
+3. "other" — Unknown or any other siddur.
+
+If the page is FRONT MATTER — a title page, copyright page, table of contents, dedication, preface, or blank page, with no actual Hebrew liturgy laid out on it — respond "other" with confidence 0.2 or lower and say "front matter" in the reasoning. Do NOT guess a siddur from front matter alone.
 
 Respond with ONLY a JSON object:
 {"layout_id": "mishkan_tfilah" or "kol_haneshamah" or "other", "confidence": 0.0 to 1.0, "reasoning": "brief explanation"}`;
@@ -335,6 +353,21 @@ function stripLatinDiacritics(t) {
    standard dotted-h \u1e25 (U+1E25) / \u1e24 (U+1E24). Most commonly it pairs "h" with
    a stray letter that visually has a hook or dot. Normalize these back to \u1e25/\u1e24.
    Also strips any remaining isolated occurrences of these aberrant characters. */
+/* Cyrillic \u2192 Latin sound-equivalent map. Cyrillic has no legitimate use in
+   Hebrew transliteration; when the AI emits Cyrillic characters (sometimes for
+   their visual or phonetic similarity to Latin), replace them with the Latin
+   letter that matches the Cyrillic sound. */
+const CYRILLIC_TO_LATIN = {
+  "\u0430":"a","\u0431":"b","\u0432":"v","\u0433":"g","\u0434":"d","\u0435":"e","\u0451":"yo","\u0436":"zh","\u0437":"z",
+  "\u0438":"i","\u0439":"y","\u043a":"k","\u043b":"l","\u043c":"m","\u043d":"n","\u043e":"o","\u043f":"p","\u0440":"r",
+  "\u0441":"s","\u0442":"t","\u0443":"u","\u0444":"f","\u0445":"h","\u0446":"ts","\u0447":"ch","\u0448":"sh","\u0449":"shch",
+  "\u044a":"","\u044b":"y","\u044c":"","\u044d":"e","\u044e":"yu","\u044f":"ya",
+  "\u0410":"A","\u0411":"B","\u0412":"V","\u0413":"G","\u0414":"D","\u0415":"E","\u0401":"Yo","\u0416":"Zh","\u0417":"Z",
+  "\u0418":"I","\u0419":"Y","\u041a":"K","\u041b":"L","\u041c":"M","\u041d":"N","\u041e":"O","\u041f":"P","\u0420":"R",
+  "\u0421":"S","\u0422":"T","\u0423":"U","\u0424":"F","\u0425":"H","\u0426":"Ts","\u0427":"Ch","\u0428":"Sh","\u0429":"Shch",
+  "\u042a":"","\u042b":"Y","\u042c":"","\u042d":"E","\u042e":"Yu","\u042f":"Ya"
+};
+
 function repairTransliteration(t) {
   /* h followed by U+A794 (\ua794, Latin small c with palatal hook) \u2192 \u1e25 */
   t = t.replace(/h\ua794/g, "\u1e25");
@@ -348,6 +381,8 @@ function repairTransliteration(t) {
   /* Drop any remaining isolated occurrences of these characters \u2014 they have no
      legitimate use in Hebrew transliteration. */
   t = t.replace(/[\ua794\u0117\u0116\u1e0b\u1e0a]/g, "");
+  /* Cyrillic \u2192 Latin sound-equivalent substitution. */
+  t = t.replace(/[\u0400-\u04ff]/g, ch => CYRILLIC_TO_LATIN[ch] !== undefined ? CYRILLIC_TO_LATIN[ch] : ch);
   return t;
 }
 
@@ -378,6 +413,99 @@ function parseRichSpans(raw) {
 /* Backwards-compat alias — some callers may still reference parseItalicSpans. */
 const parseItalicSpans = parseRichSpans;
 
+/* Strip ALL HTML-like tags from text. Used for element types where inline
+   markup is not meaningful (section_header, hebrew_*, page_number) — the AI
+   sometimes leaks <b>...</b> or <i>...</i> tags into these and they end up
+   as literal text. Also strips unrecognized tags (<u>, <em>, <strong>, <span>)
+   that would otherwise appear as literal text everywhere. */
+function stripMarkup(text) {
+  return (text || "").replace(/<\/?[a-zA-Z][^>]*>/g, "");
+}
+
+/* The AI often misclassifies small-caps text (e.g. "GUIDED MEDITATION", "COMMENTARY",
+   "THE ETERNAL ONE") as bold. Strip <b>...</b> wrappers whose content is entirely
+   uppercase letters (no lowercase). Mixed-case content is left alone since it could
+   be a legitimate inline bold span. */
+function stripBoldFromSmallCaps(text) {
+  return (text || "").replace(/<b>([^<]*?)<\/b>/g, (match, inner) => {
+    const stripped = inner.trim();
+    if (!stripped) return match;
+    /* If there's any lowercase Latin letter, keep the bold — it's not small caps */
+    if (/[a-z]/.test(stripped)) return match;
+    /* Otherwise the content is all-uppercase (or only punctuation/digits/spaces) — drop the bold */
+    return inner;
+  });
+}
+
+/* Strip unrecognized HTML-like tags from any text that may carry inline markup.
+   Preserves <i>, </i>, <b>, </b> (handled by parseRichSpans). Removes all others. */
+function stripUnknownTags(text) {
+  return (text || "").replace(/<(?!\/?[ib]>)\/?[a-zA-Z][^>]*>/g, "");
+}
+
+/* Canonical list of Hebrew/Aramaic terms that, when present in an otherwise-italic
+   instructions or attribution paragraph, should be rendered NON-italic (the usual
+   typographic convention in Jewish liturgical publications). The AI is inconsistent
+   about catching all of these even with prompt guidance, so we enforce it in code. */
+const HEBREW_TERMS = [
+  "Kabbalat Hashanah", "Kabbalat HaShanah", "Kabbalat Shabbat",
+  "Yamim Nora'im", "Yamim Noraim",
+  "sheliaḥ tzibur", "sheliach tzibur", "shaliach tzibbur", "shaliaḥ tzibbur",
+  "ma'ariv", "maariv", "ma'arib",
+  "shaḥarit", "shacharit",
+  "minḥah", "minhah", "mincha", "minchah",
+  "musaf", "mussaf",
+  "ne'ilah", "neilah",
+  "Aleinu", "Sh'ma", "Shema", "Amidah", "Kaddish", "Kedushah",
+  "Sh'moneh Esreh", "Shemoneh Esreh", "Shmoneh Esreh",
+  "Birkat Hamazon", "Birkat HaMazon",
+  "Hallel", "Selichot", "S'lichot", "Slichot",
+  "Avinu Malkeinu", "Avodah", "Hoshanot", "Tashlich", "Tashlikh",
+  "Kol Nidre", "Kol Nidrei", "Vidui", "Yizkor", "Unetaneh Tokef", "U-Netaneh Tokef",
+  "Aseret Y'mei Teshuvah", "Mahzor", "Machzor",
+  "midrash", "halakhah", "halacha",
+  "kavanah", "kavvanah", "derash",
+  "nusaḥ", "nusach",
+  "siddur", "Tanakh", "Torah", "Mishnah", "Gemara", "Talmud", "Zohar",
+  "Rosh Hashanah", "Rosh HaShanah", "Yom Kippur", "Sukkot", "Shavuot",
+  "Pesach", "Pesaḥ", "Ḥanukkah", "Chanukah", "Purim", "Simchat Torah",
+  "Tu B'Shvat", "Tu BiShvat",
+  "Hashem", "HaShem", "Adonai", "Adonay",
+  "tzedakah", "tikkun olam", "tikkun ḥatzot", "tikkun chatzot",
+  "minyan", "minyanim",
+  "kippah", "tallit", "tefillin", "mezuzah",
+  "kavvanot",
+];
+
+/* Code-side enforcement: in an instructions/attribution paragraph that doesn't
+   already use <i>...</i> markup, if any HEBREW_TERMS appear, switch the paragraph
+   into mixed-italic mode — wrap each NON-term run with <i>...</i> and leave the
+   Hebrew terms bare so they render non-italic.
+   Returns the (possibly modified) text. */
+function enforceHebrewTermItalic(text) {
+  const raw = text || "";
+  if (!raw.trim()) return raw;
+  /* If the paragraph already has italic markup, trust the AI and do not interfere. */
+  if (/<i>/i.test(raw)) return raw;
+  /* Sort by length descending so longer terms match before shorter substrings. */
+  const sorted = [...HEBREW_TERMS].sort((a, b) => b.length - a.length);
+  /* Find which terms actually appear (case-insensitive). */
+  const present = sorted.filter(t => raw.toLowerCase().includes(t.toLowerCase()));
+  if (!present.length) return raw;
+  /* Build an alternation regex with escaped terms. Case-insensitive to catch
+     varied capitalization. */
+  const escaped = present.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const re = new RegExp("(" + escaped + ")", "gi");
+  /* Split into [non-term, term, non-term, term, ...] segments. */
+  const parts = raw.split(re);
+  /* parts[even] = non-term (wrap in <i>), parts[odd] = term (leave bare). */
+  const out = parts.map((p, i) => {
+    if (i % 2 === 0) return p ? "<i>" + p + "</i>" : "";
+    return p;
+  }).join("");
+  return out;
+}
+
 function parseElementsXml(text, layoutId) {
   const match = text.match(/<elements>([\s\S]*?)<\/elements>/);
   if (!match) throw new Error("No <elements> block found");
@@ -395,11 +523,20 @@ function parseElementsXml(text, layoutId) {
         t = repairTransliteration(t);
       }
     }
+    /* Universal cleanup on every element: drop unknown HTML tags (keeps only <i>, <b>);
+       drop <b> wrappers on small-caps content (the AI often misclassifies small caps as bold). */
+    t = stripUnknownTags(t);
+    t = stripBoldFromSmallCaps(t);
     els.push({ type: m[1], order: parseInt(m[2],10), text: t });
   }
   if (!els.length) throw new Error("No elements parsed");
   els.sort((a,b) => a.order - b.order);
-  return { elements: reorderElements(els) };
+  /* reorderElements groups Hebrew/transliteration/translation for parallel-column
+     layouts (Mishkan T'filah). Kol Haneshamah is a sequential block layout where
+     element order is meaningful (e.g., transliteration may appear between two
+     Hebrew blocks). For KH and other layouts, preserve the AI's original order. */
+  const ordered = layoutId === "mishkan_tfilah" ? reorderElements(els) : els;
+  return { elements: ordered };
 }
 
 async function detectLayout(base64Image) {
@@ -546,6 +683,11 @@ function postProcessKolHaneshamah(pages) {
       "bottom_section_name", "bottom_service_name"
     ]);
 
+    /* Track whether we drop any footer-related element on this page. If we do,
+       we'll add a spacer at the end so the visual gap the footer occupied in the
+       source isn't lost. */
+    let droppedFooter = false;
+
     /* Step 1: Defensive compound-footer scan. Extract name + number from any element
        whose text matches the compound pattern, then drop the element entirely.
        Take the LAST occurrence's values (the footer is at the bottom of the page). */
@@ -559,12 +701,14 @@ function postProcessKolHaneshamah(pages) {
       if (m) {
         extractedName = m[1].trim();
         extractedNumber = m[2].trim();
+        droppedFooter = true;
         return false; /* drop this compound element */
       }
       m = t.match(numThenName);
       if (m) {
         extractedNumber = m[1].trim();
         extractedName = m[2].trim();
+        droppedFooter = true;
         return false;
       }
       return true;
@@ -577,6 +721,7 @@ function postProcessKolHaneshamah(pages) {
       if (!headerNameTypes.has(el.type)) return true;
       const cleaned = cleanHeaderText(el.text || "").trim();
       if (cleaned && !extractedName) extractedName = cleaned;
+      droppedFooter = true;
       return false;
     });
 
@@ -621,6 +766,7 @@ function postProcessKolHaneshamah(pages) {
       if (hasContentAfter) return true; /* mid-page, keep */
       /* footer-style: drop, but capture as header candidate if we don't have one */
       if (!extractedName) extractedName = el.text;
+      droppedFooter = true;
       return false;
     });
 
@@ -661,6 +807,26 @@ function postProcessKolHaneshamah(pages) {
     } else {
       els = els.filter((el, i) => !(el.type === "divider" && i > lastContentIdx));
     }
+
+    /* Step 9: If we dropped any footer-related element, append a divider spacer at
+       the end. This preserves the visual gap the footer had in the source. We add
+       this AFTER Step 8 (trailing-divider removal) so the spacer survives. */
+    if (droppedFooter) {
+      els.push({ type: "divider", text: "·", order: 9998 });
+    }
+
+    /* Step 10: Code-side Hebrew-term italic enforcement on instructions and attribution
+       elements. If the AI failed to mark transliterated Hebrew terms (Kabbalat Hashanah,
+       Yamim Nora'im, etc.) as non-italic, do it ourselves. */
+    for (const el of els) {
+      if (el.type === "instructions" || el.type === "attribution") {
+        el.text = enforceHebrewTermItalic(el.text);
+      }
+    }
+
+    /* Step 11: Drop any element with empty / whitespace-only text. Keep dividers
+       (their text is just a placeholder marker — the spacing happens at render time). */
+    els = els.filter(el => el.type === "divider" || ((el.text || "").trim().length > 0));
 
     p.elements = els;
   }
@@ -742,12 +908,12 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
       if (el.type==="section_header") {
         /* If directly preceded by a hebrew_section_header, tighten the gap so the two read as one paired heading */
         const sb = (prevType==="hebrew_section_header") ? 60 : 480;
-        ch.push(new Paragraph({style:"SectionHeader",spacing:{before:sb,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true})]}));
+        ch.push(new Paragraph({style:"SectionHeader",spacing:{before:sb,after:200},children:[new TextRun({text:stripMarkup(el.text),font:T,size:ms,bold:true})]}));
       }
-      else if (el.type==="hebrew_section_header") ch.push(new Paragraph({style:"HebrewSectionHeader",alignment:AlignmentType.CENTER,spacing:{before:480,after:60},children:[new TextRun({text:el.text,font:T,size:ms,bold:true,rightToLeft:true})]}));
-      else if (el.type==="hebrew_header") ch.push(new Paragraph({style:"HebrewHeader",alignment:AlignmentType.RIGHT,spacing:{before:360,after:200},children:[new TextRun({text:el.text,font:T,size:ms,bold:true,rightToLeft:true})]}));
-      else if (el.type==="hebrew_liturgy") ch.push(new Paragraph({style:"HebrewLiturgy",alignment:AlignmentType.RIGHT,children:[new TextRun({text:el.text,font:T,size:ms,rightToLeft:true})]}));
-      else if (el.type==="transliteration") { const nt=useCapsNorm?normalizeLeadingCaps(el.text):el.text; ch.push(new Paragraph({style:"Transliteration",spacing:{after:240},children:[new TextRun({text:nt,font:T,size:ms})]})); }
+      else if (el.type==="hebrew_section_header") ch.push(new Paragraph({style:"HebrewSectionHeader",alignment:AlignmentType.CENTER,spacing:{before:480,after:60},children:[new TextRun({text:stripMarkup(el.text),font:T,size:ms,bold:true,rightToLeft:true})]}));
+      else if (el.type==="hebrew_header") ch.push(new Paragraph({style:"HebrewHeader",alignment:AlignmentType.RIGHT,spacing:{before:360,after:200},children:[new TextRun({text:stripMarkup(el.text),font:T,size:ms,bold:true,rightToLeft:true})]}));
+      else if (el.type==="hebrew_liturgy") ch.push(new Paragraph({style:"HebrewLiturgy",alignment:AlignmentType.RIGHT,children:[new TextRun({text:stripMarkup(el.text),font:T,size:ms,rightToLeft:true})]}));
+      else if (el.type==="transliteration") { const nt=useCapsNorm?normalizeLeadingCaps(stripMarkup(el.text)):stripMarkup(el.text); ch.push(new Paragraph({style:"Transliteration",spacing:{after:240},children:[new TextRun({text:nt,font:T,size:ms})]})); }
       else if (el.type==="translation") {
         for (const [ti,raw] of el.text.split(/\n\s*\n/).entries()) {
           /* Check for indented lines (>> prefix) */
@@ -784,11 +950,15 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
         /* Footnote placement depends on layout:
            - Kol Haneshamah (KN): rendered IN-PLACE at the element's original position so
              each note stays on its own page. Small font, italic-tag aware via makeTextRuns.
-             No horizontal rule — the smaller font is the visual cue.
+             The source has a horizontal rule above the footnote block separating it from
+             body content — represent that with extra spacing before the FIRST footnote in a run.
            - All other layouts (e.g. Mishkan T'filah): footnotes are NOT shown in-place;
              they are collected and emitted together in a Footnotes section at the END of
              the document (built after the page loop below).
            Split on double-newlines for multi-paragraph footnotes. */
+        if (inlineFootnotes && prevType !== "footnote") {
+          ch.push(new Paragraph({spacing:{before:360,after:120},children:[new TextRun({text:"",font:T,size:Math.round(ms*0.4)})]}));
+        }
         for (const fp of (el.text||"").split(/\n\s*\n/)) {
           const t = fp.replace(/\n/g," ").trim();
           if (!t) continue;
@@ -807,7 +977,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
       prevType=el.type;
       ei++;
     }
-    if (pg.pageNumber) ch.push(new Paragraph({style:"PageNumber",children:[new TextRun({text:pg.pageNumber,font:T,size:ms})]}));
+    if (pg.pageNumber) ch.push(new Paragraph({style:"PageNumber",children:[new TextRun({text:stripMarkup(pg.pageNumber),font:T,size:ms})]}));
     if (pi<allPages.length-1) ch.push(new Paragraph({children:[new PageBreak()]}));
   }
 
@@ -819,7 +989,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
     let lastPage=null;
     for (const fn of endFootnotes) {
       if (fn.pageNumber!==lastPage) {
-        ch.push(new Paragraph({spacing:{before:200,after:60},children:[new TextRun({text:"Page "+fn.pageNumber,font:T,size:fs,bold:true,color:"996633"})]}));
+        ch.push(new Paragraph({spacing:{before:200,after:60},children:[new TextRun({text:"Page "+stripMarkup(fn.pageNumber),font:T,size:fs,bold:true,color:"996633"})]}));
         lastPage=fn.pageNumber;
       }
       ch.push(new Paragraph({spacing:{before:60,after:60},children:makeTextRuns(fn.text,T,fs)}));
@@ -1030,17 +1200,26 @@ export default function SiddurOCRApp() {
       const {images,totalPages} = await pdfToImages(pdfFile);
       setPageImages(images); setProgress({current:0,total:totalPages});
       setStatusText("Identifying siddur layout\u2026");
-      /* Try up to 3 pages for layout detection — page 1 is often a title
-         page or section divider with no identifiable liturgical content. */
-      const maxDetectPages = Math.min(3, images.length);
+      /* Pick candidate pages for layout detection. The opening pages of a scanned
+         siddur are often title/copyright/TOC pages with no identifiable liturgical
+         content, so start from the MIDDLE of the document (almost always actual
+         liturgy), then the 1/4 and 3/4 points, then fall back to the first pages
+         (which also covers short excerpt PDFs). Try up to 4 candidates. */
+      const N = images.length;
+      const candidates = [...new Set(
+        [Math.floor(N/2), Math.floor(N/4), Math.floor((3*N)/4), 0, 1, 2]
+          .map(i => Math.max(0, Math.min(i, N-1)))
+      )];
+      const maxDetectPages = Math.min(4, candidates.length);
       let det = { layout_id: "other", confidence: 0, reasoning: "No pages available", usage: null };
-      for (let p = 0; p < maxDetectPages; p++) {
-        if (p > 0) setStatusText(`Identifying siddur layout (page ${p + 1} of ${maxDetectPages})\u2026`);
+      for (let a = 0; a < maxDetectPages; a++) {
+        const p = candidates[a];
+        setStatusText(`Identifying siddur layout (checking page ${p + 1}${a > 0 ? `, attempt ${a + 1} of ${maxDetectPages}` : ""})\u2026`);
         const attempt = await detectLayout(images[p].base64);
         if (attempt.usage) setActualUsage(prev=>({inputTokens:prev.inputTokens+(attempt.usage.input_tokens||0),outputTokens:prev.outputTokens+(attempt.usage.output_tokens||0)}));
         if (attempt.layout_id && attempt.layout_id !== "other" && LAYOUTS[attempt.layout_id]) {
           det = attempt;
-          if (p > 0) det.reasoning = (det.reasoning || "") + ` (detected from page ${p + 1})`;
+          det.reasoning = (det.reasoning || "") + ` (detected from page ${p + 1})`;
           break;
         }
         /* Keep the best "other" result (highest confidence) as fallback */
@@ -1233,7 +1412,7 @@ export default function SiddurOCRApp() {
         {status==="idle" && <div style={{marginTop:40,color:"#8a8070",fontSize:13,lineHeight:1.8}}>
           <div style={{fontWeight:700,color:"#5a5040",marginBottom:8}}>How it works</div>
           <div><strong style={{color:"#a07830"}}>1.</strong> Upload a siddur PDF — pages are rendered as high-resolution images.</div>
-          <div><strong style={{color:"#a07830"}}>2.</strong> AI auto-detects the siddur layout (you can override).</div>
+          <div><strong style={{color:"#a07830"}}>2.</strong> AI auto-detects the siddur layout by sampling pages from the middle of the document (you can override).</div>
           <div><strong style={{color:"#a07830"}}>3.</strong> Adjust font size, add notes, then hit <strong>Begin Processing</strong>.</div>
           <div><strong style={{color:"#a07830"}}>4.</strong> Each page is analyzed: Hebrew with nikkud, transliteration, translation, and more.</div>
           <div><strong style={{color:"#a07830"}}>5.</strong> A Word document is generated with named paragraph styles; footnotes stay on the page for Kol Haneshamah and are collected at the end of the document for other layouts.</div>
