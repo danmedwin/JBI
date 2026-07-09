@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-07-08c build";
+const VERSION_STAMP = "v2026-07-08d build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -539,13 +539,21 @@ function parseElementsXml(text, layoutId) {
   return { elements: ordered };
 }
 
+/* Auth headers for direct browser calls to the Anthropic API. The key is entered
+   at the page gate and lives in sessionStorage for this tab only. Every fetch to
+   api.anthropic.com MUST use these headers — a bare fetch 401s. */
+function apiHeaders() {
+  const key = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("siddur-api-key")) || "";
+  return { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" };
+}
+
 async function detectLayout(base64Image) {
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, temperature: 0,
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(),
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, temperature: 0,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } }, { type: "text", text: LAYOUT_DETECTION_PROMPT }] }] }),
     });
-    if (!r.ok) return { layout_id: "other", confidence: 0, reasoning: "API error", usage: null };
+    if (!r.ok) return { layout_id: "other", confidence: 0, reasoning: "API error (HTTP " + r.status + ")", usage: null };
     const data = await r.json();
     const text = (data.content||[]).map(c=>c.text||"").join("");
     const parsed = JSON.parse(text.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim());
@@ -556,11 +564,11 @@ async function detectLayout(base64Image) {
 function isContentFilterError(b) { return typeof b === "string" && b.includes("content filtering policy"); }
 function isRateLimitError(s, b) { return s === 429 || (typeof b === "string" && b.includes("rate_limit")); }
 
-async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 1) {
+async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 3) {
   let response;
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4096, temperature: 0, system: systemPrompt,
+    response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(),
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4096, temperature: 0, system: systemPrompt,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } },
           { type: "text", text: "Analyze this siddur page. Extract text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML." }] }] }),
     });
@@ -1121,7 +1129,7 @@ function TokenEstimate({ pageImages, selectedLayout, actualUsage }) {
     <div style={{background:"rgba(58,53,40,0.04)",borderRadius:12,padding:"16px 20px",margin:"16px 0"}}>
       <div style={{fontSize:14,fontWeight:700,color:"#2a2518",marginBottom:8}}>Estimated Token Usage</div>
       <div style={{fontSize:13,color:"#5a5040",lineHeight:1.8}}>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>{numPages} page{numPages!==1?"s":""} + layout detection</span><span style={{color:"#8a8070"}}>Claude Sonnet 4</span></div>
+        <div style={{display:"flex",justifyContent:"space-between"}}><span>{numPages} page{numPages!==1?"s":""} + layout detection</span><span style={{color:"#8a8070"}}>Claude Sonnet 4.5</span></div>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Input tokens (est.)</span><span style={{fontWeight:600}}>{fmtT(totalIn)}</span></div>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Output tokens (est.)</span><span style={{fontWeight:600}}>{fmtT(loOut)}–{fmtT(hiOut)}</span></div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4,paddingTop:6,borderTop:"1px solid rgba(58,53,40,0.1)"}}>
@@ -1216,7 +1224,7 @@ export default function SiddurOCRApp() {
          (e.g. an all-English reading) from ending detection with a wrong answer. */
       let det = null;
       let bestKnown = null;
-      let bestOther = { layout_id: "other", confidence: 0, reasoning: "No pages available", usage: null };
+      let bestOther = { layout_id: "other", confidence: -1, reasoning: "No pages available", usage: null };
       for (let a = 0; a < maxDetectPages; a++) {
         const p = candidates[a];
         setStatusText(`Identifying siddur layout (checking page ${p + 1}${a > 0 ? `, attempt ${a + 1} of ${maxDetectPages}` : ""})\u2026`);
@@ -1232,6 +1240,7 @@ export default function SiddurOCRApp() {
         }
       }
       if (!det) det = bestKnown || bestOther;
+      if ((det.confidence || 0) < 0) det.confidence = 0;
       const detId = det.layout_id && LAYOUTS[det.layout_id] ? det.layout_id : "other";
       setDetectedLayout(detId); setDetectionConfidence(det.confidence||0); setDetectionReasoning(det.reasoning||""); setSelectedLayout(detId);
       setStatus("ready"); setStatusText("Ready to process");
