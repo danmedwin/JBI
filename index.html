@@ -80,7 +80,7 @@
 const { useState, useCallback, useRef, useEffect } = React;
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-07-08d build";
+const VERSION_STAMP = "v2026-07-08g build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -91,6 +91,8 @@ const LAYOUTS = {
     systemPrompt: `You are an expert OCR and layout analysis system specialized in Jewish prayer books (siddurim). You will be given an image of a page from Mishkan T'filah, the Reform movement's siddur published by CCAR Press. Your job is to identify every layout element on the page and extract the text with high accuracy.
 
 CRITICAL: Pay extreme attention to Hebrew vowels (nikkud) — the dots, dashes, and marks above/below Hebrew letters. These MUST be captured accurately.
+
+CRITICAL — TRANSCRIBE THE PRINTED TEXT, NOT THE REMEMBERED TEXT: Mishkan T'filah sometimes alters traditional liturgy (added matriarchs, alternative wordings, gender-inclusive language). If the printed Hebrew differs from the traditional version you know — in gender, number, conjugation, suffixes, or word choice — the printed text is correct: transcribe exactly what is in the image. Never autocomplete a familiar prayer from memory.
 
 CRITICAL: Do NOT introduce stray characters, numbers, or artifacts into the extracted text. If you see a digit, punctuation mark, or character that does not clearly belong to the Hebrew word or phrase, omit it. Navigation and header elements in particular should contain ONLY the actual Hebrew or English text visible — no extra digits, no stray "1"s or other artifacts from page numbering, footnote markers, or OCR noise. Double-check every element for phantom characters before returning it.
 
@@ -157,6 +159,8 @@ TRANSCRIBE, DO NOT CORRECT. This is a faithful OCR transcription task, not a tra
 - Auto-complete partial words or "fix" what looks like a misprint
 - Modernize archaic spellings or normalize unusual vocalizations
 If the image clearly shows nikkud X under letter Y, output exactly nikkud X under letter Y — regardless of whether that's the grammatically expected form. The user wants what the printed page actually says, not what it should have said. When in doubt, render the mark you can see; do not guess based on context.
+
+INTENTIONAL TEXTUAL VARIANTS — THE PRINTED TEXT OVERRIDES THE TRADITIONAL TEXT: Kol Haneshamah is a Reconstructionist siddur that DELIBERATELY rewrites parts of the traditional liturgy: God may be addressed in the feminine (e.g., בְּרוּכָה אַתְּ instead of בָּרוּךְ אַתָּה), masculine suffixes may become feminine (־ךָ ↔ ־ךְ), verbs may be re-conjugated for gender or number, singular may become plural, and divine names may differ from the familiar ones (יָהּ, שְׁכִינָה, מְקוֹר הַחַיִּים, מַלְכָּה). You know the traditional wording of these prayers from memory — that memory is a HAZARD here. NEVER autocomplete a familiar prayer; read every word from the image. When a prayer you recognize differs from the version you know in gender, number, conjugation, pronoun suffix, or word choice, the printed variant is CORRECT and is precisely what the publisher intended — transcribe it letter-for-letter with its printed nikkud. Before finalizing any well-known prayer, re-read the actual image word by word and confirm you copied the PRINTED words, not the remembered ones. The same applies to transliteration and translation: they follow the printed variant text, not the traditional text.
 
 NIKKUD VISUAL DISTINCTIONS — common confusions to watch for carefully (look closely at the actual shape, do NOT guess):
 - Patach (ַ) vs Kamatz (ָ): both appear below the letter. Patach is a single HORIZONTAL line. Kamatz is a horizontal line with a small VERTICAL stroke descending from its center, forming a T-shape (or inverted T). If you see any vertical tick, it is kamatz, not patach.
@@ -291,6 +295,7 @@ FINAL SELF-CHECK before returning:
 12. Italic exceptions — be CONSERVATIVE about marking non-italic, but THOROUGH within paragraphs that use the markup. Scan each italic paragraph for transliterated Hebrew terms (Kabbalat Hashanah, Yamim Nora'im, sheliaḥ tzibur, ma'ariv, shaḥarit, minḥah, Aleinu, Amidah, Kaddish, etc.). If you find ANY, switch to <i>...</i> markup and leave EVERY such term non-italic — not just some. NEVER mark English page references, numbers, dates, or ordinary English words as non-italic. When in doubt about a non-Hebrew word, leave it italic.
 14. Bold markup: did you wrap visually bold text in <b>...</b> tags? Did you avoid using any other HTML-style tags like <u>, <em>, <strong>, <span>? Only <i> and <b> are valid.
 13. Did you transcribe exactly what is in the image, or did you "correct" anything? Go back and verify: each Hebrew letter, each nikkud mark, each English word matches what is visually on the page. If a word looks unusual or "wrong", that is what you must transcribe.
+15. Unfamiliar or altered Hebrew: if a prayer differs from the traditional version you remember (feminine God-language, changed pronoun suffixes, plural forms, different divine names), did you keep the PRINTED variant? Re-check every gender ending and suffix against the image — do NOT revert them to the traditional text.
 
 Return ONLY the XML block.`,
   },
@@ -301,6 +306,8 @@ Return ONLY the XML block.`,
     systemPrompt: `You are an expert OCR system for Jewish prayer books (siddurim). Extract text with high accuracy.
 
 CRITICAL: Preserve Hebrew vowels (nikkud). Use <i>...</i> for italic English text in translations and footnotes.
+
+TRANSCRIBE THE PRINTED TEXT, NOT THE REMEMBERED TEXT: many modern siddurim intentionally alter traditional liturgy (gender, number, divine names). If the printed Hebrew differs from the familiar traditional wording, the printed text is correct — transcribe exactly what appears in the image; never autocomplete a prayer from memory.
 
 Element types: navigation, header, page_number, instructions, section_header (CENTERED ALL CAPS only), hebrew_liturgy (preserve nikkud), transliteration, translation (use <i> for italics), footnote (use <i> for italics).
 
@@ -588,7 +595,7 @@ function enforceHebrewTermItalic(text) {
 function parseElementsXml(text, layoutId) {
   const match = text.match(/<elements>([\s\S]*?)<\/elements>/);
   if (!match) throw new Error("No <elements> block found");
-  const els = []; const re = /<element\s+type="([^"]+)"\s+order="(\d+)">([\s\S]*?)<\/element>/g; let m;
+  let els = []; const re = /<element\s+type="([^"]+)"\s+order="(\d+)">([\s\S]*?)<\/element>/g; let m;
   while ((m = re.exec(match[1])) !== null) {
     let t = m[3].replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").trim();
     /* Strip arrow characters */
@@ -610,6 +617,26 @@ function parseElementsXml(text, layoutId) {
   }
   if (!els.length) throw new Error("No elements parsed");
   els.sort((a,b) => a.order - b.order);
+  /* Drop consecutive duplicate headers. The AI sometimes extracts the same section
+     title twice on one page (e.g. once from the running header and once from the
+     page footer or a mid-page title), producing back-to-back identical lines like
+     "PESUKEY DEZIMRA/VERSES OF PRAISE". Compare normalized text among header-type
+     elements; elements that are skipped at render time (navigation, header,
+     page_number, bottom_*) do not break adjacency. */
+  const HEADER_TYPES = new Set(["section_header", "hebrew_section_header", "hebrew_header"]);
+  const SKIPPED_TYPES = new Set(["navigation", "header", "page_number", "bottom_section_name", "bottom_service_name"]);
+  const normHeader = s => stripMarkup(s || "").replace(/\s+/g, " ").trim().toUpperCase();
+  let lastHeaderNorm = null;
+  els = els.filter(el => {
+    if (HEADER_TYPES.has(el.type)) {
+      const n = normHeader(el.text);
+      if (n && n === lastHeaderNorm) return false;
+      lastHeaderNorm = n;
+      return true;
+    }
+    if (!SKIPPED_TYPES.has(el.type)) lastHeaderNorm = null;
+    return true;
+  });
   /* reorderElements groups Hebrew/transliteration/translation for parallel-column
      layouts (Mishkan T'filah). Kol Haneshamah is a sequential block layout where
      element order is meaningful (e.g., transliteration may appear between two
@@ -747,6 +774,61 @@ function cleanHeaderText(t) {
   const trailNum = t.match(/^(.+?)\s*\W+\s*(\d{2,})$/);
   if (trailNum && /[A-Za-z\u0590-\u05FF]/.test(trailNum[1])) return trailNum[1].trim();
   return t;
+}
+
+/* ─── Document-wide dotted-ḥ consistency pass ─── */
+/* The AI catches the dot under the h (ḥ, U+1E25 / Ḥ, U+1E24) on some occurrences of a
+   word and misses it on others. Fix by consistency: collect every word the document
+   renders WITH a dotted ḥ, then re-dot the occurrences of the same word that came
+   back with a plain h. Runs across ALL pages so a word dotted on page 3 repairs its
+   plain twin on page 90. */
+const DOTTED_H_TYPES = new Set(["transliteration", "translation", "footnote", "instructions", "attribution"]);
+/* Real English words that could collide with a dotted transliteration (e.g. English
+   "hen" vs ḥen "grace"). Outside transliteration elements, leave these alone. */
+const DOTTED_H_STOPLIST = new Set(["hen", "hag", "hall", "hush", "hash", "hoser"]);
+const DOTTED_H_WORD_RE = /[\p{L}\p{M}'\u2019-]+/gu;
+
+function enforceDottedHConsistency(pages) {
+  /* Pass 1: build plain-key → dotted-form dictionary from every ḥ word seen. */
+  const dict = new Map(); /* key (lowercase, plain h) → dotted lowercase form, or null if two dotted forms conflict */
+  for (const pg of pages) {
+    if (pg.skipped) continue;
+    for (const el of pg.elements || []) {
+      if (!DOTTED_H_TYPES.has(el.type) || !el.text) continue;
+      for (let w of el.text.match(DOTTED_H_WORD_RE) || []) {
+        w = w.normalize("NFC");
+        if (!/[\u1E25\u1E24]/.test(w)) continue;
+        const lower = w.toLowerCase();
+        const key = lower.replace(/\u1E25/g, "h");
+        const prev = dict.get(key);
+        if (prev === undefined) dict.set(key, lower);
+        else if (prev !== null && prev !== lower) dict.set(key, null);
+      }
+    }
+  }
+  if (!dict.size) return pages;
+  /* Pass 2: re-dot plain-h occurrences of known dotted words, preserving case. */
+  for (const pg of pages) {
+    if (pg.skipped) continue;
+    for (const el of pg.elements || []) {
+      if (!DOTTED_H_TYPES.has(el.type) || !el.text) continue;
+      el.text = el.text.replace(DOTTED_H_WORD_RE, raw => {
+        const w = raw.normalize("NFC");
+        if (/[\u1E25\u1E24]/.test(w) || !/[hH]/.test(w)) return raw;
+        const key = w.toLowerCase();
+        const dotted = dict.get(key);
+        if (!dotted) return raw;
+        if (el.type !== "transliteration" && DOTTED_H_STOPLIST.has(key)) return raw;
+        let out = "";
+        for (let i = 0; i < w.length; i++) {
+          if (dotted[i] === "\u1E25" && (w[i] === "h" || w[i] === "H")) out += (w[i] === "H" ? "\u1E24" : "\u1E25");
+          else out += w[i];
+        }
+        return out;
+      });
+    }
+  }
+  return pages;
 }
 
 function postProcessKolHaneshamah(pages) {
@@ -1384,6 +1466,7 @@ function SiddurOCRApp() {
       }
       let proc=pages;
       if (selectedLayout==="kol_haneshamah") proc=postProcessKolHaneshamah(pages);
+      proc=enforceDottedHConsistency(proc);
       setProgress({current:total,total}); setAllPages(proc); setFootnotes(allFn); setSkippedPages(skipped);
       setStatus("building"); setStatusText("Generating Word document\u2026");
       await loadDocxLib();
