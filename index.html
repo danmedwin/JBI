@@ -80,7 +80,7 @@
 const { useState, useCallback, useRef, useEffect } = React;
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-07-08g build";
+const VERSION_STAMP = "v2026-07-13 build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -299,6 +299,106 @@ FINAL SELF-CHECK before returning:
 
 Return ONLY the XML block.`,
   },
+  "mahzor_lev_shalem": {
+    name: "Mahzor Lev Shalem",
+    publisher: "Rabbinical Assembly",
+    description: "Conservative High Holy Day mahzor — four-voice spread: Hebrew liturgy, English translation, margin readings (kavanot), and running commentary",
+    systemPrompt: `You are an expert layout analysis and text extraction system specialized in Jewish prayer books. You will be given an image of a page from Mahzor Lev Shalem, the Conservative movement's High Holy Day mahzor (Rabbinical Assembly, designed by Scott-Martin Kosofsky). This book has embedded digital text and a sophisticated TWO-COLOR (black + red) design. Your job is to identify EVERY layout element on the page and extract its text with high accuracy.
+
+THE SPREAD: The image is usually a TWO-PAGE SPREAD — the LEFT page carries the English, the RIGHT page carries the Hebrew. Facing pages share the SAME page number (both footers say e.g. "11"). Occasionally the image is a single page or a section-opener; handle those with the same element types.
+
+PAGE GEOGRAPHY — the four voices of Mahzor Lev Shalem:
+1. RIGHT page, main column: the Hebrew liturgy, with full nikkud. Bold Hebrew marks passages that are sung or recited aloud by the congregation.
+2. LEFT page, main column: the English translation, with italic prayer headings and red italic transliteration passages.
+3. LEFT page, far-left margin: kavanot — meditational readings, poems, and alternative prayers, each usually with an italic title and a small-caps credit line (—AUTHOR, sometimes "(adapted)" or "(trans. Name)"). Sometimes a Hebrew piyyut with its English translation side by side.
+4. RIGHT page, far-right margin: the running commentary, in smaller sans-serif type. Each note opens with its lemma (the phrase being commented on) in BOLD SMALL CAPS, usually followed by the Hebrew phrase. Commentary frequently OVERFLOWS the margin and continues as a full-width block across the bottom of the page — join a continuation to the note it belongs to. Torah-reading pages key notes to verses ("VERSE 1. TOOK NOTE OF SARAH...").
+Plus page furniture: red section titles at the top of each page (English small caps on the left page, Hebrew on the right page) and footer breadcrumbs at the bottom (e.g. "ROSH HASHANAH · EVENING SERVICE · SILENT AMIDAH" on the left; a mirrored Hebrew breadcrumb on the right; the current subsection is printed in red).
+
+RED INK = STRUCTURE. Red is used for: page titles, rubrics and instructions ("The ark is opened.", "We rise."), conditional labels ("All services continue:", "In the evening, we say:", "At the conclusion of Shabbat:"), speaker labels ("Leader:", "Torah Reader (or Gabbai):", "The congregation responds:"), variant labels ("Version with Patriarchs:", "Version with Patriarchs and Matriarchs:"), cross-references ("On the second day, turn to page 103."), transliteration passages, verse numbers, aliyah markers, bracketed insertions, and ritual symbols.
+
+YOUR #1 PRIORITY: Hebrew nikkud MUST be preserved with 100% fidelity. Every dot, dash, and mark must appear. Outputting Hebrew without nikkud is a critical failure.
+
+NIKKUD VISUAL DISTINCTIONS — do NOT guess; look at the actual shape:
+- Patach (ַ) is a single horizontal line; Kamatz (ָ) has a small vertical stroke descending from its center. Any vertical tick = kamatz.
+- Hirik (ִ) is ONE dot; Shva (ְ) is TWO dots stacked vertically. Count the dots.
+- Tzeireh (ֵ) is two dots side by side; Segol (ֶ) is three dots in a downward triangle.
+- Cholam (ֹ) is a dot above; Dagesh (ּ) is a dot inside the letter body.
+
+THE DIVINE NAME: This mahzor prints the four-letter divine name as UNVOCALIZED יהוה. Transcribe it exactly as יהוה — never substitute יְיָ, never add vowels to it. In the English, the divine name is set in small caps ("ADONAI") — render it as "Adonai".
+
+TRANSCRIBE THE PRINTED TEXT, NOT THE REMEMBERED TEXT: Mahzor Lev Shalem deliberately adapts liturgy — matriarchs added in brackets, gender-sensitive translation, new compositions. If the printed text differs from the traditional version you remember, the printed text is correct. Never autocomplete a familiar prayer from memory. Do not "correct" unusual spellings or nikkud.
+
+BRACKETED INSERTIONS: Seasonal and optional insertions are printed inside square brackets — red in the original (e.g. [וְאִמּוֹתֵינוּ], [הַשַּׁבָּת וְ], [this Shabbat and], [their]). TRANSCRIBE the brackets and their contents exactly where they occur.
+
+RITUAL SYMBOLS: The bow symbol, the ¶ mark (congregational addition), and the ◁ pointer (leader begins aloud) appear in the text. Do NOT transcribe these symbols — omit them.
+
+TRANSLITERATION CONVENTIONS: chet is ḥ (U+1E25) / Ḥ (U+1E24) — never "ch", never a bare "h", never "h"+combining mark. khaf is "kh". A RAISED DOT · (U+00B7) marks the pataḥ g'nuvah and breaks vowel clusters (ru·aḥ, yisra·el, elo·ah) — preserve the raised dot exactly where printed.
+
+BOLD HEBREW IS MEANINGFUL: bold type in the Hebrew liturgy marks the passages sung/recited aloud (usually the ones transliterated). Wrap bold Hebrew spans in <b>...</b> tags. This layout is an EXCEPTION to the usual no-bold-in-Hebrew rule.
+
+ITALIC IN ENGLISH IS MEANINGFUL: in translations, roman type = prayer leader, italic = congregation (responsive readings). Preserve italics with <i>...</i> tags in translation, kavanah, and commentary text. Instructions and attributions are entirely italic by nature — no tags needed there.
+
+Element types:
+
+- page_number: The spread's page number. It is printed at the bottom of BOTH facing pages (the same number). Extract it ONCE.
+- footer: A footer breadcrumb line, WITHOUT the page number (e.g. "ROSH HASHANAH · EVENING SERVICE · SILENT AMIDAH", or the Hebrew ערבית לראש השנה · תפילת העמידה בלחש). One element per breadcrumb.
+- section_header: The red small-caps English title at the top of the left page (e.g. "THE SILENT AMIDAH", "TORAH READING, FIRST DAY") or on a section-opener.
+- hebrew_section_header: The red Hebrew title at the top of the right page (e.g. תפילת העמידה בלחש), or the large red Hebrew title of a section-opener.
+- toc: On a section-opener page only: the mini table of contents. ONE element; one entry per line formatted "English title — Hebrew title — page" as printed.
+- hebrew_liturgy: The main Hebrew column. Full nikkud. <b>...</b> around bold (sung) passages. Keep bracketed insertions. Keep יהוה unvocalized. Join the lines of each prayer/paragraph into one flowing paragraph; separate distinct paragraphs with a blank line. OMIT the small Hebrew-letter verse markers in Torah/Haftarah readings.
+- hebrew_header: A Hebrew prayer title set larger/apart within the Hebrew column mid-page (e.g. בִּרְכוֹת הַתּוֹרָה, קְדֻשָּׁה).
+- transliteration: A red italic phonetic passage (full paragraphs on Torah-service pages, interleaved lines in the Kedushah).
+- translation: English text of the main column. <i>...</i> for italic (congregational) spans. Keep verse numbers in Torah readings as plain digits (e.g. "1 Adonai took note of Sarah..."). Separate visually distinct blocks into separate elements.
+- prayer_title: A heading within the main English column: the italic headings ("First B'rakhah: Our Ancestors", "Words of Welcome") AND the small-caps subheads ("U-NETANEH TOKEF—THE SACRED POWER OF THE DAY", "PRIVATE MEDITATION", "B'RAKHOT RECITED BY ONE CALLED UP TO THE TORAH"). Capture exactly as printed.
+- instructions: ANY red rubric: procedural directions, conditional labels, speaker labels, variant labels, cross-references, and aliyah markers ("First Aliyah", "[Third Aliyah on Shabbat]", שני). IMPORTANT: the same rubric is usually printed TWICE on a spread — once on the English page and once above the Hebrew. Extract each distinct rubric ONCE, at the position before the content it governs.
+- kavanah: ONE far-left-margin reading (meditation, poem, or alternative prayer). Each visually separate margin item = its own kavanah element. If it has a title, put the title on the first line, then a newline, then the text. For a margin piyyut with side-by-side Hebrew and English, put the Hebrew first, a blank line, then the English, all in one element.
+- attribution: A credit line: "—CHAIM STERN (adapted)", "—SOLOMON IBN GABIROL", "—A HASIDIC TEACHING", "(trans. Aubrey L. Glazer)", "—BABYLONIAN TALMUD, BERAKHOT", or a small scripture citation ending a psalm ("Psalm 103 (selected verses)"). Place each attribution IMMEDIATELY after the element it credits.
+- commentary: ONE commentary note from the right margin or the bottom overflow block. Each note = one element, beginning with its small-caps lemma (keep the lemma as the start of the text, followed by the Hebrew phrase if printed, then the note). If a note starts in the margin and continues in the bottom block, JOIN the pieces into one element. Verse-keyed notes ("VERSE 6. GOD HAS BROUGHT ME LAUGHTER...") work the same way.
+
+SPECIAL STRUCTURES:
+- PARALLEL VARIANT COLUMNS: when two versions print side by side ("Version with Patriarchs:" / "Version with Patriarchs and Matriarchs:") — in Hebrew AND in English — output them SEQUENTIALLY: first variant's label (instructions) + its full text, then the second variant's label + its full text. Never interleave the columns.
+- FILL-IN BLANKS (aliyah honors, Yizkor): render each blank line as "________" and keep the parenthetical labels as printed, e.g. "(for a father) ________ אֲבִי מוֹרִי".
+- HEBREW ON THE ENGLISH PAGE: some left pages set Hebrew verses beside their English (e.g. Yizkor psalms). Emit hebrew_liturgy then translation for each such block.
+
+ORDER OF OUTPUT for a spread:
+1. hebrew_section_header, then section_header
+2. RIGHT-page main column, top to bottom: instructions (rubrics) in position, hebrew_header, hebrew_liturgy
+3. LEFT-page main column, top to bottom: prayer_title, instructions in position, translation, transliteration
+4. LEFT-margin kavanot, top to bottom, each followed by its attribution
+5. commentary notes, in print order (margin top-to-bottom, then bottom block)
+6. footer elements, then page_number LAST
+
+Return using XML tags:
+
+<elements>
+<element type="hebrew_section_header" order="1">תְּפִלַּת הָעֲמִידָה בְּלַחַשׁ</element>
+<element type="section_header" order="2">THE SILENT AMIDAH</element>
+<element type="instructions" order="3">We recite this Silent Amidah at the evening and morning services of Rosh Hashanah.</element>
+<element type="instructions" order="4">Version with Patriarchs:</element>
+<element type="hebrew_liturgy" order="5"><b>בָּרוּךְ אַתָּה יהוה,</b> אֱלֹהֵינוּ וֵאלֹהֵי אֲבוֹתֵינוּ [וְאִמּוֹתֵינוּ]...</element>
+<element type="prayer_title" order="6">First B'rakhah: Our Ancestors</element>
+<element type="translation" order="7">Barukh atah Adonai, our God and God of our ancestors...</element>
+<element type="kavanah" order="8">Meditation on Prayer
+In the Bible, God speaks to us, and we listen...</element>
+<element type="attribution" order="9">—ISAAC ARAMA</element>
+<element type="commentary" order="10">AMIDAH. The Amidah, literally "the prayer said while standing," is the moment of personal meditation...</element>
+<element type="footer" order="11">ROSH HASHANAH · EVENING SERVICE · SILENT AMIDAH</element>
+<element type="footer" order="12">ערבית לראש השנה · תפילת העמידה בלחש</element>
+<element type="page_number" order="13">11</element>
+</elements>
+
+FINAL SELF-CHECK before returning:
+1. Nikkud present and verified against the image on every Hebrew word? יהוה left unvocalized?
+2. Did you keep every bracketed insertion, and keep the PRINTED variants (matriarchs, gender-sensitive wording) instead of the remembered traditional text?
+3. Is each commentary note a SEPARATE element starting with its lemma? Did you join margin→bottom continuations?
+4. Is each margin reading a SEPARATE kavanah element with its attribution immediately after it?
+5. Did you extract each rubric ONCE per spread (not twice), and both footers plus ONE page_number?
+6. ḥ (U+1E25) for every dotted h, and the raised dot · preserved in transliteration?
+7. <b> only on genuinely bold Hebrew; <i> preserved for congregational/italic English spans?
+8. Parallel variant columns output sequentially, never interleaved?
+
+Return ONLY the XML block.`,
+  },
   "other": {
     name: "Other / Unknown",
     publisher: "",
@@ -339,12 +439,20 @@ Known layouts:
    - Hebrew liturgy in block paragraphs with full nikkud; transliteration (when present) sits below the Hebrew and renders chet as ḥ (dot below) or an underlined h
    Any TWO of these signatures = kol_haneshamah with high confidence, even on a Hebrew-only or English-only page.
 
-3. "other" — Unknown or any other siddur.
+3. "mahzor_lev_shalem" — Mahzor Lev Shalem (Rabbinical Assembly, Conservative movement High Holy Day mahzor). NOTE: pages often arrive as TWO-PAGE SPREADS — one image containing a left (English) page and a right (Hebrew) page. Signatures:
+   - TWO-COLOR design: black text with RED page titles, rubrics, transliteration passages, bracketed insertions, and symbols
+   - Four-voice layout: far-LEFT margin column of readings/meditations credited "—AUTHOR NAME" in small caps; main English translation column with italic prayer headings; Hebrew liturgy column (right page); far-RIGHT margin running commentary in smaller sans-serif type keyed by BOLD SMALL-CAPS lemmas, often continuing across the bottom of the page
+   - Footer breadcrumbs with middle dots: "11 ROSH HASHANAH · EVENING SERVICE · SILENT AMIDAH" (left page) and a mirrored HEBREW breadcrumb (right page); FACING PAGES SHARE THE SAME PAGE NUMBER
+   - The divine name printed as unvocalized יהוה in the Hebrew; "Adonai" in small caps in the English
+   - Red italic transliteration; red bracketed insertions like [וְאִמּוֹתֵינוּ] for matriarchs
+   Any TWO of these signatures = mahzor_lev_shalem with high confidence.
+
+4. "other" — Unknown or any other siddur.
 
 If the page is FRONT MATTER — a title page, copyright page, table of contents, dedication, preface, or blank page — respond "other" with confidence 0.2 or lower and say "front matter" in the reasoning. A page of plain English readings or plain Hebrew with NONE of the signatures above is weak evidence: respond "other" with low confidence rather than guessing a known siddur.
 
 Respond with ONLY a JSON object:
-{"layout_id": "mishkan_tfilah" or "kol_haneshamah" or "other", "confidence": 0.0 to 1.0, "reasoning": "brief explanation"}`;
+{"layout_id": "mishkan_tfilah" or "kol_haneshamah" or "mahzor_lev_shalem" or "other", "confidence": 0.0 to 1.0, "reasoning": "brief explanation"}`;
 
 /* ─── PDF / AI Helpers ─── */
 
@@ -600,12 +708,12 @@ function parseElementsXml(text, layoutId) {
     let t = m[3].replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").trim();
     /* Strip arrow characters */
     t = t.replace(/[\u2190-\u21FF\u2794-\u27BF\u2B00-\u2B73\u25B6\u25C0\u25BA\u25C4\u27F6]/g, "").trim();
-    if (layoutId === "kol_haneshamah") {
+    if (layoutId === "kol_haneshamah" || layoutId === "mahzor_lev_shalem") {
       if (m[1] === "transliteration") t = stripLatinDiacritics(t);
       /* Repair aberrant ḥ-substitution characters in any English text — the AI's
          weird character substitution can show up in translations, footnotes, etc.
          when they contain transliterated Hebrew terms (like "Nevareḥ"). */
-      if (["transliteration","translation","footnote","attribution","instructions"].includes(m[1])) {
+      if (["transliteration","translation","footnote","attribution","instructions","kavanah","commentary","prayer_title"].includes(m[1])) {
         t = repairTransliteration(t);
       }
     }
@@ -624,7 +732,7 @@ function parseElementsXml(text, layoutId) {
      elements; elements that are skipped at render time (navigation, header,
      page_number, bottom_*) do not break adjacency. */
   const HEADER_TYPES = new Set(["section_header", "hebrew_section_header", "hebrew_header"]);
-  const SKIPPED_TYPES = new Set(["navigation", "header", "page_number", "bottom_section_name", "bottom_service_name"]);
+  const SKIPPED_TYPES = new Set(["navigation", "header", "page_number", "bottom_section_name", "bottom_service_name", "footer"]);
   const normHeader = s => stripMarkup(s || "").replace(/\s+/g, " ").trim().toUpperCase();
   let lastHeaderNorm = null;
   els = els.filter(el => {
@@ -782,7 +890,7 @@ function cleanHeaderText(t) {
    renders WITH a dotted ḥ, then re-dot the occurrences of the same word that came
    back with a plain h. Runs across ALL pages so a word dotted on page 3 repairs its
    plain twin on page 90. */
-const DOTTED_H_TYPES = new Set(["transliteration", "translation", "footnote", "instructions", "attribution"]);
+const DOTTED_H_TYPES = new Set(["transliteration", "translation", "footnote", "instructions", "attribution", "kavanah", "commentary", "prayer_title"]);
 /* Real English words that could collide with a dotted transliteration (e.g. English
    "hen" vs ḥen "grace"). Outside transliteration elements, leave these alone. */
 const DOTTED_H_STOPLIST = new Set(["hen", "hag", "hall", "hush", "hash", "hoser"]);
@@ -1062,7 +1170,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
     if (pg.skipped) { ch.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{before:400,after:200},children:[new TextRun({text:"[Page "+pg.sourcePageIndex+" skipped: "+(pg.skipReason||"error")+"]",font:T,size:is,italics:true,color:"996633"})]})); if(pi<allPages.length-1) ch.push(new Paragraph({children:[new PageBreak()]})); continue; }
     let ei=0, prevType="";
     for (const el of pg.elements||[]) {
-      if (["navigation","header","page_number","bottom_section_name","bottom_service_name"].includes(el.type)) { ei++; continue; }
+      if (["navigation","header","page_number","bottom_section_name","bottom_service_name","footer"].includes(el.type)) { ei++; continue; }
 
       /* Extra spacing before a new liturgical block that follows a reading/attribution */
       if ((el.type==="hebrew_liturgy"||el.type==="hebrew_header") && (prevType==="translation"||prevType==="attribution")) {
@@ -1107,6 +1215,28 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
             ch.push(new Paragraph({style:"Translation",spacing:{before:sb,after:120},children:makeTextRuns(pt,T,ms)}));
           }
         }
+      } else if (el.type==="prayer_title") {
+        /* Mahzor Lev Shalem: heading within the English column (italic prayer
+           headings and small-caps subheads). Provisional rendering until MLS
+           output guidelines exist: left-aligned bold. */
+        ch.push(new Paragraph({spacing:{before:360,after:120},children:[new TextRun({text:stripMarkup(el.text),font:T,size:ms,bold:true})]}));
+      } else if (el.type==="kavanah") {
+        /* Mahzor Lev Shalem: left-margin meditational reading/poem. Provisional
+           rendering: slightly smaller type, first line (title) bold if present. */
+        const paras=(el.text||"").split(/\n\s*\n/);
+        for (const [ki,kp] of paras.entries()) {
+          const lines=kp.split("\n").map(l=>l.trim()).filter(Boolean);
+          for (const [li,line] of lines.entries()) {
+            const isTitle=(ki===0&&li===0&&lines.length>1);
+            ch.push(new Paragraph({spacing:{before:(ki===0&&li===0)?240:40,after:40},children:makeTextRuns(line,T,is,isTitle?{bold:true}:{})}))
+          }
+        }
+      } else if (el.type==="toc") {
+        /* Mahzor Lev Shalem: section-opener mini table of contents — one line per entry. */
+        for (const line of (el.text||"").split("\n")) {
+          const lt=line.trim(); if(!lt) continue;
+          ch.push(new Paragraph({spacing:{before:60,after:60},children:makeTextRuns(lt,T,ms)}));
+        }
       } else if (el.type==="attribution") {
         /* Attribution: right-aligned italic by default. <i> tags flip to mixed mode
            (italic only where marked). <b> tags add bold where marked. */
@@ -1115,7 +1245,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
         /* Instructions: left-aligned italic by default. <i> tags flip to mixed mode
            (italic only where marked). <b> tags add bold where marked. */
         ch.push(new Paragraph({style:"Instructions",spacing:{before:p12,after:p12},children:makeTextRuns(el.text,T,is,{},{defaultItalic:true})}));
-      } else if (el.type==="footnote") {
+      } else if (el.type==="footnote" || el.type==="commentary") {
         /* Footnote placement depends on layout:
            - Kol Haneshamah (KN): rendered IN-PLACE at the element's original position so
              each note stays on its own page. Small font, italic-tag aware via makeTextRuns.
@@ -1154,7 +1284,7 @@ function buildDocx(allPages, footnotes, fontSize, layoutId) {
      grouped under the page number they came from so readers can locate them. */
   if (!inlineFootnotes && endFootnotes.length) {
     ch.push(new Paragraph({children:[new PageBreak()]}));
-    ch.push(new Paragraph({style:"SectionHeader",spacing:{before:240,after:240},children:[new TextRun({text:"Footnotes",font:T,size:ms,bold:true})]}));
+    ch.push(new Paragraph({style:"SectionHeader",spacing:{before:240,after:240},children:[new TextRun({text:(layoutId==="mahzor_lev_shalem")?"Commentary":"Footnotes",font:T,size:ms,bold:true})]}));
     let lastPage=null;
     for (const fn of endFootnotes) {
       if (fn.pageNumber!==lastPage) {
@@ -1278,7 +1408,7 @@ function TokenEstimate({ pageImages, selectedLayout, actualUsage }) {
   }
 
   // Estimate
-  const sysT = selectedLayout==="mishkan_tfilah"?2400:selectedLayout==="kol_haneshamah"?2200:1500;
+  const sysT = selectedLayout==="mishkan_tfilah"?2400:selectedLayout==="kol_haneshamah"?2200:selectedLayout==="mahzor_lev_shalem"?3200:1500;
   const perPage = sysT+2500+50;
   const totalIn = 2900+(perPage*numPages);
   const loOut = 100+(500*numPages), hiOut = 100+(2000*numPages);
@@ -1315,7 +1445,7 @@ function ProgressBar({current,total,status}) {
 
 function ResultsSummary({allPages,layoutName,skippedPages}) {
   const c={}; for (const p of allPages) { if(p.skipped) continue; for (const e of p.elements||[]) c[e.type]=(c[e.type]||0)+1; }
-  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",hebrew_section_header:"Hebrew Section Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",divider:"Dividers",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels"};
+  const L={hebrew_liturgy:"Hebrew Liturgy",hebrew_header:"Hebrew Headers",hebrew_section_header:"Hebrew Section Headers",transliteration:"Transliteration",translation:"Translation",attribution:"Attributions",section_header:"Section Headers",instructions:"Instructions",page_number:"Page Numbers",footnote:"Footnotes",divider:"Dividers",navigation:"Navigation (skipped)",header:"Headers (skipped)",bottom_section_name:"Section Labels",bottom_service_name:"Service Labels",prayer_title:"Prayer Titles",kavanah:"Kavanot (margin readings)",commentary:"Commentary Notes",footer:"Footers (skipped)",toc:"TOC Entries"};
   return (
     <div style={{background:"rgba(200,164,78,0.08)",borderRadius:12,padding:"16px 20px",margin:"16px 0"}}>
       <div style={{fontSize:14,fontWeight:700,color:"#2a2518",marginBottom:4}}>Elements Identified</div>
@@ -1599,7 +1729,6 @@ function SiddurOCRApp() {
     </div>
   );
 }
-
 
 ReactDOM.createRoot(document.getElementById("root")).render(<SiddurOCRApp />);
 </script>
