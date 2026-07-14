@@ -80,7 +80,7 @@
 const { useState, useCallback, useRef, useEffect } = React;
 
 /* ─── Version Stamp (computed at load time in user's local timezone, Eastern fallback) ─── */
-const VERSION_STAMP = "v2026-07-13 build";
+const VERSION_STAMP = "v2026-07-13b build";
 
 /* ─── Layout Definitions ─── */
 const LAYOUTS = {
@@ -477,6 +477,56 @@ async function loadPdfLib() {
   return window.PDFLib;
 }
 
+/* ─── Embedded text layer (born-digital PDFs) ───
+   Digitally-produced PDFs (e.g. Mahzor Lev Shalem) carry the publisher's own text.
+   We extract it per page and pass it to the model ALONGSIDE the page image as a
+   word-accuracy reference. The image stays authoritative: real text layers have
+   defects — custom-font ligature glyphs with no Unicode mapping (extracted as the
+   SUB control char), Adobe PUA codepoints for small caps, nikkud emitted BEFORE
+   its base letter, letter-spacing spaces inside words, and column interleaving. */
+
+function cleanEmbeddedText(t) {
+  /* Adobe PUA small caps (U+F700-F7FF) -> the ASCII letter they shadow */
+  t = t.replace(/[\uF700-\uF7FF]/g, c => {
+    const code = c.charCodeAt(0) - 0xF700;
+    return (code >= 0x20 && code <= 0x7e) ? String.fromCharCode(code) : "";
+  });
+  /* Unmapped glyphs (ToUnicode gaps) arrive as SUB (U+001A) - make them visible */
+  t = t.replace(/\u001a/g, "\uFFFD");
+  /* Strip bidi embedding/isolate controls and other C0 controls except \n */
+  t = t.replace(/[\u202a-\u202e\u2066-\u2069]/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, "");
+  /* Collapse horizontal whitespace runs (column gaps) */
+  t = t.replace(/[ \t]{2,}/g, "  ").replace(/\n{3,}/g, "\n\n");
+  return t.trim();
+}
+
+async function extractPageText(page) {
+  try {
+    const tc = await page.getTextContent();
+    const items = (tc.items || []).filter(it => it.str && it.str.trim().length);
+    /* Group items into lines by y coordinate (PDF y axis points up), then
+       left-to-right within each line. This is a READING AID, not true layout —
+       multi-column spreads still interleave; the model is told so. */
+    const lines = [];
+    for (const it of items) {
+      const y = it.transform[5], x = it.transform[4];
+      let line = lines.find(l => Math.abs(l.y - y) <= 2.5);
+      if (!line) { line = { y, parts: [] }; lines.push(line); }
+      line.parts.push({ x, str: it.str });
+    }
+    lines.sort((a, b) => b.y - a.y);
+    const raw = lines.map(l => l.parts.sort((a, b) => a.x - b.x).map(p => p.str).join(" ")).join("\n");
+    let out = cleanEmbeddedText(raw);
+    const MAX = 9000;
+    if (out.length > MAX) out = out.slice(0, MAX) + "\n[reference text truncated]";
+    return out;
+  } catch (_) { return ""; }
+}
+
+function buildRefTextBlock(refText) {
+  return "REFERENCE — EMBEDDED PDF TEXT LAYER for this page. This PDF is digitally produced; below is the publisher's own embedded text, extracted programmatically. Use it to confirm the EXACT WORDS and SPELLING of what you read in the image — it is strong evidence against misreading or autocompleting from memory. HOWEVER, the image remains the sole authority, because this extraction has known defects: (1) � marks a glyph the PDF could not map — read that letter from the image (often a lamed or a final letter with its vowel); (2) Hebrew vowel points may appear BEFORE the letter they belong to, and stray spaces may appear inside words; (3) columns are interleaved line-by-line, so reading order here is jumbled — take element order, grouping, color, and formatting ONLY from the image; (4) small-caps and symbols may be garbled. Where this text and the image genuinely disagree on a letter or word, the IMAGE wins.\n\n---BEGIN EMBEDDED TEXT---\n" + refText + "\n---END EMBEDDED TEXT---";
+}
+
 async function pdfToImages(file) {
   const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
@@ -488,7 +538,8 @@ async function pdfToImages(file) {
     canvas.width = viewport.width; canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
     const dataUrl = canvas.toDataURL("image/png");
-    images.push({ pageNum: i, base64: dataUrl.split(",")[1], dataUrl });
+    const textLayer = await extractPageText(page);
+    images.push({ pageNum: i, base64: dataUrl.split(",")[1], dataUrl, textLayer });
   }
   return { images, totalPages: pdf.numPages };
 }
@@ -778,23 +829,24 @@ async function detectLayout(base64Image) {
 function isContentFilterError(b) { return typeof b === "string" && b.includes("content filtering policy"); }
 function isRateLimitError(s, b) { return s === 429 || (typeof b === "string" && b.includes("rate_limit")); }
 
-async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 3) {
+async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt = 1, maxAttempts = 3, refText = "") {
   let response;
   try {
     response = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(),
       body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4096, temperature: 0, system: systemPrompt,
         messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: base64Image } },
-          { type: "text", text: "Analyze this siddur page. Extract text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML." }] }] }),
+          { type: "text", text: "Analyze this siddur page. Extract text with full Hebrew nikkud. Wrap italic English in <i>...</i>. Return ONLY <elements> XML." },
+          ...(refText ? [{ type: "text", text: buildRefTextBlock(refText) }] : [])] }] }),
     });
   } catch (err) {
-    if (attempt < maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt+1, maxAttempts); }
+    if (attempt < maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image, systemPrompt, layoutId, attempt+1, maxAttempts, refText); }
     throw new Error("Network error: "+err.message);
   }
   if (!response.ok) {
     const body = await response.text().catch(()=>"unknown");
-    if (response.status===400 && isContentFilterError(body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); } let detail=""; try { const j=JSON.parse(body); detail=j.error?.message||""; } catch(_){} throw new Error("CONTENT_FILTER: Blocked after "+attempt+" attempts."+(detail?" Detail: "+detail:"")); }
-    if (isRateLimitError(response.status,body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,5000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); } throw new Error("RATE_LIMIT: Exceeded after "+attempt+" attempts."); }
-    if (response.status>=500 && attempt<maxAttempts) { await new Promise(r=>setTimeout(r,3000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); }
+    if (response.status===400 && isContentFilterError(body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,2000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts,refText); } let detail=""; try { const j=JSON.parse(body); detail=j.error?.message||""; } catch(_){} throw new Error("CONTENT_FILTER: Blocked after "+attempt+" attempts."+(detail?" Detail: "+detail:"")); }
+    if (isRateLimitError(response.status,body)) { if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,5000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts,refText); } throw new Error("RATE_LIMIT: Exceeded after "+attempt+" attempts."); }
+    if (response.status>=500 && attempt<maxAttempts) { await new Promise(r=>setTimeout(r,3000*attempt)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts,refText); }
     throw new Error("API HTTP "+response.status+": "+body);
   }
   const data = await response.json();
@@ -804,7 +856,7 @@ async function analyzePageWithClaude(base64Image, systemPrompt, layoutId, attemp
     const parsed = parseElementsXml(text, layoutId);
     return { ...parsed, usage: data.usage || null };
   } catch (parseErr) {
-    if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,1000)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts); }
+    if (attempt<maxAttempts) { await new Promise(r=>setTimeout(r,1000)); return analyzePageWithClaude(base64Image,systemPrompt,layoutId,attempt+1,maxAttempts,refText); }
     throw new Error("Parse failed after "+attempt+" attempts: "+parseErr.message);
   }
 }
@@ -828,13 +880,14 @@ async function cropImage(base64, topPct, bottomPct) {
   });
 }
 
-async function splitPageAnalyze(base64Image, systemPrompt, layoutId) {
+async function splitPageAnalyze(base64Image, systemPrompt, layoutId, refText = "") {
   const topHalf = await cropImage(base64Image, 0, 0.55);
   const bottomHalf = await cropImage(base64Image, 0.45, 1.0);
   const topNote = "\n\nNOTE: This image is the TOP PORTION of a page (cropped). Extract whatever content is visible. Do not worry about content cut off at the bottom edge. Return elements for what you can see.";
   const bottomNote = "\n\nNOTE: This image is the BOTTOM PORTION of a page (cropped). Extract whatever content is visible. Do not worry about content cut off at the top edge. Return elements for what you can see. IMPORTANT: Any text below a horizontal rule or dividing line is a FOOTNOTE — tag it as <footnote>, not as translation or other types.";
-  const topResult = await analyzePageWithClaude(topHalf, systemPrompt + topNote, layoutId);
-  const bottomResult = await analyzePageWithClaude(bottomHalf, systemPrompt + bottomNote, layoutId);
+  const halfNote = refText ? "\n\nNOTE: the embedded reference text covers the FULL page; this image is only a portion of it — use only the matching part." : "";
+  const topResult = await analyzePageWithClaude(topHalf, systemPrompt + topNote + halfNote, layoutId, 1, 3, refText);
+  const bottomResult = await analyzePageWithClaude(bottomHalf, systemPrompt + bottomNote + halfNote, layoutId, 1, 3, refText);
 
   /* Merge elements, deduplicating the overlap zone.
      The top/bottom halves overlap by ~10% of the page, so some elements appear in both.
@@ -1409,8 +1462,11 @@ function TokenEstimate({ pageImages, selectedLayout, actualUsage }) {
 
   // Estimate
   const sysT = selectedLayout==="mishkan_tfilah"?2400:selectedLayout==="kol_haneshamah"?2200:selectedLayout==="mahzor_lev_shalem"?3200:1500;
+  /* Embedded text layer (born-digital PDFs) rides along as a reference block */
+  const refChars = pageImages.reduce((s,p)=>s+((p.textLayer&&p.textLayer.length)||0),0);
+  const refPages = pageImages.filter(p=>p.textLayer&&p.textLayer.length>200).length;
   const perPage = sysT+2500+50;
-  const totalIn = 2900+(perPage*numPages);
+  const totalIn = 2900+(perPage*numPages)+Math.round(refChars/4)+(refPages*260);
   const loOut = 100+(500*numPages), hiOut = 100+(2000*numPages);
   const inCost = (totalIn/1e6)*INPUT_RATE;
   const loCost = inCost+(loOut/1e6)*OUTPUT_RATE;
@@ -1428,6 +1484,9 @@ function TokenEstimate({ pageImages, selectedLayout, actualUsage }) {
           <span style={{fontWeight:700,color:"#a07830"}}>{fmtC(loCost)} – {fmtC(hiCost)}</span>
         </div>
       </div>
+      {refPages>0 && <div style={{marginTop:10,padding:"8px 12px",background:"rgba(120,160,120,0.12)",borderRadius:8,fontSize:12,color:"#4a6040",lineHeight:1.5}}>
+        ✓ Embedded text layer found on {refPages} of {numPages} page{numPages!==1?"s":""} — the publisher's own text rides along with each page image as a word-accuracy reference (the image stays authoritative for layout, color, and nikkud).
+      </div>}
       <div style={{fontSize:11,color:"#a09080",marginTop:8}}>Based on $3/MTok input, $15/MTok output. Actual usage may vary. Does not include retries.</div>
     </div>
   );
@@ -1556,19 +1615,19 @@ function SiddurOCRApp() {
         try {
           let result;
           try {
-            result = await analyzePageWithClaude(pageImages[i].base64, sysPrompt, selectedLayout);
+            result = await analyzePageWithClaude(pageImages[i].base64, sysPrompt, selectedLayout, 1, 3, pageImages[i].textLayer || "");
           } catch(firstErr) {
             if (firstErr.message.startsWith("CONTENT_FILTER:")) {
               /* Retry with instructions to skip sensitive content */
               setStatusText("Page "+(i+1)+": content filter hit, retrying with safe mode\u2026");
               const safePrompt = sysPrompt + "\n\nCONTENT SAFETY NOTE: A previous attempt to process this page was blocked by content filters. Please extract all text EXCEPT any content that might be considered sensitive or inappropriate. For any text you must omit, insert a placeholder: [content omitted due to filtering]. Extract everything else normally with full accuracy.";
               try {
-                result = await analyzePageWithClaude(pageImages[i].base64, safePrompt, selectedLayout, 1, 1);
+                result = await analyzePageWithClaude(pageImages[i].base64, safePrompt, selectedLayout, 1, 1, pageImages[i].textLayer || "");
               } catch(safeErr) {
                 /* Safe mode also failed — try split-page mode */
                 setStatusText("Page "+(i+1)+": safe mode failed, trying split-page mode\u2026");
                 try {
-                  result = await splitPageAnalyze(pageImages[i].base64, sysPrompt, selectedLayout);
+                  result = await splitPageAnalyze(pageImages[i].base64, sysPrompt, selectedLayout, pageImages[i].textLayer || "");
                 } catch(_) { throw firstErr; /* all three modes failed, throw original error */ }
               }
             } else {
