@@ -1,0 +1,800 @@
+<title>Layout Lab · Prayer Book Page Anatomy</title>
+<style>
+  :root{
+    --paper:#FAFAF7; --table:#EFEEE9; --panel:#F5F4F0; --panel2:#ECEBE6;
+    --ink:#1C1B1A; --muted:#6E6A64; --line:#DEDCD5; --accent:#A61E22;
+    --accent-ink:#FFFFFF; --sel:#A61E22; --shadow:0 2px 10px rgba(28,27,26,.12);
+    --chip:#FFFFFF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#191A1C; --table:#141517; --panel:#202124; --panel2:#26272B;
+      --ink:#E8E6E2; --muted:#9A978F; --line:#34353A; --accent:#E05A54;
+      --accent-ink:#1C1B1A; --sel:#E05A54; --shadow:0 2px 10px rgba(0,0,0,.4);
+      --chip:#2C2D31;
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#FAFAF7; --table:#EFEEE9; --panel:#F5F4F0; --panel2:#ECEBE6;
+    --ink:#1C1B1A; --muted:#6E6A64; --line:#DEDCD5; --accent:#A61E22;
+    --accent-ink:#FFFFFF; --sel:#A61E22; --shadow:0 2px 10px rgba(28,27,26,.12);
+    --chip:#FFFFFF;
+  }
+  :root[data-theme="dark"]{
+    --paper:#191A1C; --table:#141517; --panel:#202124; --panel2:#26272B;
+    --ink:#E8E6E2; --muted:#9A978F; --line:#34353A; --accent:#E05A54;
+    --accent-ink:#1C1B1A; --sel:#E05A54; --shadow:0 2px 10px rgba(0,0,0,.4);
+    --chip:#2C2D31;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden}
+  button,select,input,textarea{font:inherit;color:inherit}
+  button{cursor:pointer;background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;padding:5px 10px}
+  button:hover{border-color:var(--muted)}
+  button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{
+    outline:2px solid var(--accent);outline-offset:1px}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+  button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  button.ghost:hover{color:var(--ink)}
+  button[disabled]{opacity:.45;cursor:default}
+  select,input[type=text],textarea{background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+  textarea{resize:vertical}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+
+  /* ── Top bar ── */
+  header{display:flex;align-items:center;gap:14px;padding:8px 14px;
+    border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+  .wordmark{font-family:"Iowan Old Style",Palatino,"Palatino Linotype",Georgia,serif;
+    font-size:20px;font-weight:700;letter-spacing:.01em;white-space:nowrap}
+  .wordmark .red{color:var(--accent)}
+  .tagline{color:var(--muted);font-size:12px;border-left:1px solid var(--line);
+    padding-left:14px;white-space:nowrap}
+  header .spacer{flex:1}
+  .ver{color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+  label.inline{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;white-space:nowrap}
+
+  /* ── Main grid ── */
+  main{flex:1;display:grid;grid-template-columns:172px 1fr 304px;min-height:0}
+  .rail{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;
+    display:flex;flex-direction:column;min-height:0}
+  .rail.right{border-right:none;border-left:1px solid var(--line)}
+  .rail h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    margin:0;padding:10px 12px 6px;font-weight:600}
+  .rail section{border-bottom:1px solid var(--line);padding-bottom:10px}
+  .rail section:last-child{border-bottom:none}
+
+  /* pages rail */
+  .pagecard{margin:4px 8px;padding:6px;border:1px solid var(--line);border-radius:8px;
+    background:var(--chip);cursor:pointer;position:relative}
+  .pagecard.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .pagecard img{width:100%;display:block;border-radius:4px;background:#fff}
+  .pagecard .noimg{width:100%;aspect-ratio:10/7;display:flex;align-items:center;justify-content:center;
+    background:var(--panel2);border-radius:4px;color:var(--muted);font-size:11px}
+  .pagecard .pname{font-size:11px;margin-top:4px;color:var(--muted);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .pagecard .del{position:absolute;top:2px;right:2px;background:var(--chip);border:1px solid var(--line);
+    border-radius:50%;width:20px;height:20px;line-height:1;padding:0;font-size:12px;color:var(--muted);display:none}
+  .pagecard:hover .del{display:block}
+  .railbtns{display:flex;flex-direction:column;gap:6px;padding:8px 12px}
+
+  /* ── Canvas zone ── */
+  .center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--table)}
+  .toolbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .toolbar .grp{display:flex;align-items:center;gap:4px}
+  .toolbar .sep{width:1px;height:20px;background:var(--line)}
+  #modeDraw.on,#labelsBtn.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  #viewport{flex:1;overflow:auto;position:relative;min-height:0}
+  #stage{position:relative;margin:24px auto;box-shadow:var(--shadow);display:none;
+    background:#fff;line-height:0}
+  #stage img{display:block;width:100%;height:100%;user-select:none;-webkit-user-drag:none}
+  #boxes{position:absolute;inset:0}
+  .box{position:absolute;border:1.5px solid;border-radius:2px;cursor:grab}
+  .box.hid{display:none}
+  .box .tag{position:absolute;top:-1.5px;left:-1.5px;transform:translateY(-100%);
+    font-size:10px;line-height:1;padding:2px 5px;border-radius:3px 3px 3px 0;color:#fff;
+    white-space:nowrap;pointer-events:none;font-family:ui-monospace,Menlo,monospace}
+  .box.sel{border-width:2.5px;cursor:grabbing;z-index:5}
+  .h{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid;border-radius:2px;z-index:6}
+  .h.nw{top:-5px;left:-5px;cursor:nwse-resize}.h.n{top:-5px;left:calc(50% - 4.5px);cursor:ns-resize}
+  .h.ne{top:-5px;right:-5px;cursor:nesw-resize}.h.e{top:calc(50% - 4.5px);right:-5px;cursor:ew-resize}
+  .h.se{bottom:-5px;right:-5px;cursor:nwse-resize}.h.s{bottom:-5px;left:calc(50% - 4.5px);cursor:ns-resize}
+  .h.sw{bottom:-5px;left:-5px;cursor:nesw-resize}.h.w{top:calc(50% - 4.5px);left:-5px;cursor:ew-resize}
+  #empty{max-width:520px;margin:48px auto;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:24px 28px;box-shadow:var(--shadow)}
+  #empty h3{font-family:"Iowan Old Style",Palatino,Georgia,serif;margin:0 0 10px;font-size:20px}
+  #empty ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;color:var(--muted)}
+  #empty b{color:var(--ink)}
+  .statusbar{flex:none;display:flex;gap:16px;padding:4px 12px;border-top:1px solid var(--line);
+    background:var(--panel);color:var(--muted);font-size:11px;min-height:24px;align-items:center}
+
+  /* ── Inspector ── */
+  #ellist{list-style:none;margin:0;padding:2px 8px;display:flex;flex-direction:column;gap:3px;
+    max-height:32vh;overflow-y:auto}
+  #ellist li{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;
+    border:1px solid transparent;cursor:pointer;background:var(--chip)}
+  #ellist li.sel{border-color:var(--accent)}
+  #ellist .num{flex:none;width:20px;height:20px;border-radius:5px;color:#fff;font-size:10px;
+    display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace}
+  #ellist .lab{flex:1;min-width:0;font-size:12px}
+  #ellist .lab small{display:block;color:var(--muted);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;unicode-bidi:plaintext}
+  #ellist .ord{display:flex;flex-direction:column}
+  #ellist .ord button{padding:0 4px;font-size:9px;line-height:1.3;border-radius:3px}
+  .edrow{display:flex;flex-direction:column;gap:4px;padding:4px 12px}
+  .edrow label{font-size:11px;color:var(--muted)}
+  .edrow .boxnums{display:flex;gap:6px}
+  .edrow .boxnums input{width:100%;font-size:12px}
+  .edbtns{display:flex;gap:6px;padding:6px 12px}
+  #legend{padding:2px 8px;display:flex;flex-direction:column;gap:2px}
+  #legend label{display:flex;align-items:center;gap:7px;font-size:12px;padding:2px 4px;cursor:pointer}
+  #legend .sw{width:13px;height:13px;border-radius:3px;flex:none}
+  #legend .cnt{margin-left:auto;color:var(--muted);font-size:11px}
+  .exports{display:flex;flex-direction:column;gap:6px;padding:8px 12px}
+
+  /* ── Modal / toast ── */
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
+    align-items:center;justify-content:center;z-index:50}
+  #modal.open{display:flex}
+  #modalCard{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    width:min(680px,92vw);max-height:86vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+  #modalCard h3{margin:0;padding:14px 18px 8px;font-family:"Iowan Old Style",Palatino,Georgia,serif}
+  #modalBody{padding:0 18px;overflow-y:auto;flex:1}
+  #modalBody textarea{width:100%;min-height:280px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  #modalBtns{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);
+    color:var(--paper);padding:8px 16px;border-radius:8px;font-size:13px;opacity:0;
+    transition:opacity .2s;pointer-events:none;z-index:60}
+  @media (prefers-reduced-motion: reduce){#toast{transition:none}}
+  #toast.show{opacity:1}
+</style>
+
+<header>
+  <div class="wordmark">Layout<span class="red"> Lab</span></div>
+  <div class="tagline">prayer book page anatomy · see &amp; fix</div>
+  <label class="inline">Book
+    <select id="bookSel"></select>
+  </label>
+  <div class="spacer"></div>
+  <button id="importBtn">Import file…</button>
+  <button id="pasteBtn">Paste JSON…</button>
+  <span class="ver">v1.2</span>
+</header>
+
+<main>
+  <!-- pages rail -->
+  <nav class="rail" aria-label="Pages">
+    <h2>Pages</h2>
+    <div id="pagelist"></div>
+    <div class="railbtns">
+      <button id="addPageBtn" class="ghost">+ Add page…</button>
+    </div>
+  </nav>
+
+  <!-- canvas -->
+  <div class="center">
+    <div class="toolbar">
+      <div class="grp">
+        <button id="modeDraw" title="Draw a new box (D)">✏️ Draw box</button>
+      </div>
+      <div class="sep"></div>
+      <div class="grp">
+        <button id="zoomOut" title="Zoom out">−</button>
+        <span id="zoomPct" class="mono" style="min-width:44px;text-align:center">fit</span>
+        <button id="zoomIn" title="Zoom in">+</button>
+        <button id="zoomFit" title="Fit to window">Fit</button>
+      </div>
+      <div class="sep"></div>
+      <button id="labelsBtn" class="on" title="Show/hide box labels">Labels</button>
+      <button id="undoBtn" title="Undo (⌘Z)">↩ Undo</button>
+      <div class="spacer" style="flex:1"></div>
+      <span id="pageTitle" class="mono" style="color:var(--muted);font-size:12px"></span>
+    </div>
+    <div id="viewport">
+      <div id="empty">
+        <h3>Nothing on the light table yet</h3>
+        <ol>
+          <li><b>In chat:</b> ask Claude to analyze pages from your book PDF. You'll get a <b>page packet</b> (.json) — the page image plus Claude's guesses at every layout element.</li>
+          <li><b>Drag the packet here</b> (or any bare page image, to mark up from scratch).</li>
+          <li><b>Fix what's wrong:</b> click a box to relabel or resize it, draw boxes Claude missed, delete phantoms, correct the reading order.</li>
+          <li><b>Export</b> the corrected JSON and the "profile feedback" write-up for the next improvement round.</li>
+        </ol>
+      </div>
+      <div id="stage">
+        <img id="pageimg" alt="Loaded prayer book page">
+        <div id="boxes"></div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span id="statPos" class="mono"></span>
+      <span id="statSel"></span>
+      <span style="margin-left:auto" id="statSave"></span>
+    </div>
+  </div>
+
+  <!-- inspector -->
+  <aside class="rail right" aria-label="Inspector">
+    <section>
+      <h2>Elements <span id="elCount" style="letter-spacing:0;text-transform:none"></span></h2>
+      <ul id="ellist"></ul>
+    </section>
+    <section id="editor" style="display:none">
+      <h2>Selected element</h2>
+      <div class="edrow"><label for="edType">Type</label><select id="edType"></select></div>
+      <div class="edrow"><label for="edCont">Continues from (same content stream)</label>
+        <select id="edCont"></select></div>
+      <div class="edrow"><label for="edText">Text snippet</label>
+        <textarea id="edText" rows="3" style="unicode-bidi:plaintext"></textarea></div>
+      <div class="edrow"><label for="edNote">Note</label>
+        <input type="text" id="edNote" placeholder="e.g. attribution in small caps"></div>
+      <div class="edrow"><label>Box · % of page (x y w h)</label>
+        <div class="boxnums">
+          <input class="mono" id="bx" inputmode="decimal"><input class="mono" id="by" inputmode="decimal">
+          <input class="mono" id="bw" inputmode="decimal"><input class="mono" id="bh" inputmode="decimal">
+        </div></div>
+      <div class="edbtns"><button id="edDelete">Delete element</button></div>
+    </section>
+    <section>
+      <h2>Element types</h2>
+      <div id="legend"></div>
+      <div class="railbtns"><button id="addTypeBtn" class="ghost">+ Add custom type…</button></div>
+    </section>
+    <section>
+      <h2>Page info</h2>
+      <div class="edrow"><label for="pgLabel">Printed page label</label>
+        <input type="text" id="pgLabel" placeholder="e.g. 34 (spread)"></div>
+      <div class="edrow"><label for="pgNotes">Page notes (feed the feedback)</label>
+        <textarea id="pgNotes" rows="3" placeholder="Anything Claude should learn from this page"></textarea></div>
+    </section>
+    <section>
+      <h2>Export</h2>
+      <div class="exports">
+        <button id="expFeedback" class="primary">Profile feedback…</button>
+        <button id="expPage">Page JSON (boxes only)</button>
+        <button id="expPacket">Page packet (with image)</button>
+        <button id="expAll">All pages JSON</button>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<div id="modal" role="dialog" aria-modal="true">
+  <div id="modalCard">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <div id="modalBtns"></div>
+  </div>
+</div>
+<div id="toast"></div>
+<input type="file" id="fileInput" accept=".json,image/png,image/jpeg,image/webp" multiple hidden>
+
+<script>
+"use strict";
+/* ═════════ Layout Lab v1.0 — general prayer-book page anatomy checker ═════════ */
+
+const PALETTE = ["#1E66D0","#0E8A6C","#C4571A","#7B3FBF","#B0308F","#5E7B12",
+  "#C81E5B","#0F7E9E","#8A6A00","#4753C6","#3E8E3E","#56708A","#9C3B22","#2F6B6B"];
+
+const PRESETS = {
+  generic: { name:"Generic siddur", types:[
+    ["hebrew_liturgy","Hebrew liturgy"],["transliteration","Transliteration"],
+    ["translation","Translation"],["hebrew_section_header","Hebrew section header"],
+    ["section_header","Section header"],["instructions","Instructions"],
+    ["commentary","Commentary"],["footnote","Footnote"],["navigation","Navigation"],
+    ["running_header","Running header/footer"],["page_number","Page number"],["graphic","Graphic"]]},
+  mahzor_lev_shalem: { name:"Mahzor Lev Shalem", types:[
+    ["hebrew_liturgy","Hebrew liturgy"],["translation","Translation"],
+    ["transliteration","Transliteration"],["hebrew_section_header","Hebrew section header"],
+    ["section_header","Section header"],["sub_header","Sub-header (small caps)"],
+    ["instructions","Instructions"],["margin_commentary","Margin commentary"],
+    ["alternative_reading","Alternative reading/kavanah"],["bottom_commentary","Bottom commentary"],
+    ["running_footer","Running footer"],["page_number","Page number"],["graphic","Graphic"]]},
+  mishkan_tfilah: { name:"Mishkan T'filah", types:[
+    ["hebrew_liturgy","Hebrew liturgy"],["transliteration","Transliteration"],
+    ["translation","Translation"],["hebrew_section_header","Hebrew section header"],
+    ["section_header","Section header"],["instructions","Instructions"],
+    ["navigation","Margin navigation"],["header","Running header"],
+    ["footnote","Footnote"],["page_number","Page number"],["graphic","Graphic"]]},
+  kol_haneshamah: { name:"Kol HaNeshamah", types:[
+    ["hebrew_liturgy","Hebrew liturgy"],["transliteration","Transliteration"],
+    ["translation","Translation"],["section_header","Section header"],
+    ["instructions","Instructions"],["commentary","Commentary"],
+    ["footnote","Footnote"],["running_header","Running header"],
+    ["page_number","Page number"],["graphic","Graphic"]]}
+};
+
+/* ── state ── */
+const S = { book:"generic", pages:[], cur:-1, sel:null, mode:"select",
+  zoom:0 /* 0 = fit */, labels:true, hidden:new Set() };
+let uid = 1;
+const $ = id => document.getElementById(id);
+
+/* ── taxonomy ── */
+function taxonomy(){
+  const map = new Map();
+  (PRESETS[S.book]||PRESETS.generic).types.forEach(([k,l],i)=>map.set(k,{key:k,label:l,color:PALETTE[i%PALETTE.length]}));
+  const pg = page();
+  if(pg){
+    (pg.customTypes||[]).forEach(t=>{ if(!map.has(t.key)) map.set(t.key,t); });
+    pg.elements.forEach(e=>{ if(!map.has(e.type))
+      map.set(e.type,{key:e.type,label:e.type.replace(/_/g," "),color:PALETTE[map.size%PALETTE.length]}); });
+  }
+  return map;
+}
+const typeInfo = k => taxonomy().get(k) || {key:k,label:k,color:"#888"};
+
+/* ── page helpers ── */
+const page = () => S.pages[S.cur] || null;
+const selEl = () => { const p=page(); return p ? p.elements.find(e=>e.id===S.sel) : null; };
+
+function newPage(name){
+  return { name:name||("page-"+(S.pages.length+1)), label:"", source:"", notes:"",
+    image:null, w:0, h:0, book:S.book, elements:[], customTypes:[], deleted:[], undo:[] };
+}
+
+/* ── undo ── */
+function snap(){ const p=page(); if(!p) return;
+  p.undo.push(JSON.stringify({elements:p.elements,deleted:p.deleted}));
+  if(p.undo.length>60) p.undo.shift(); }
+function undo(){ const p=page(); if(!p||!p.undo.length) return;
+  const s=JSON.parse(p.undo.pop()); p.elements=s.elements; p.deleted=s.deleted;
+  if(!p.elements.find(e=>e.id===S.sel)) S.sel=null;
+  renderAll(); save(); }
+
+/* ── import ── */
+function importFiles(files){
+  [...files].forEach(f=>{
+    if(f.type.startsWith("image/")){
+      const r=new FileReader();
+      r.onload=()=>addImagePage(f.name.replace(/\.[^.]+$/,""), r.result);
+      r.readAsDataURL(f);
+    } else {
+      const r=new FileReader();
+      r.onload=()=>{ try{ importJSON(JSON.parse(r.result), f.name); }
+        catch(err){ toast("Couldn't read "+f.name+": "+err.message); } };
+      r.readAsText(f);
+    }
+  });
+}
+function addImagePage(name,dataURI){
+  const img=new Image();
+  img.onload=()=>{ const p=newPage(name); p.image=dataURI; p.w=img.naturalWidth; p.h=img.naturalHeight;
+    S.pages.push(p); S.cur=S.pages.length-1; S.sel=null; renderAll(); save();
+    toast("Added "+name+" — draw boxes or paste analysis JSON"); };
+  img.src=dataURI;
+}
+function normElements(list){
+  const raw=list||[];
+  const out=raw.map(e=>{
+    const box=e.box||{x:e.x,y:e.y,w:e.w,h:e.h};
+    const el={ id:"e"+(uid++), type:e.type||"unknown", box:{x:+box.x||0,y:+box.y||0,w:+box.w||1,h:+box.h||1},
+      text:e.text||"", note:e.note||"", src:e.src||"claude", continuesFrom:null };
+    el.orig=e.orig||{type:el.type,box:{...el.box},idx:null};
+    return el;
+  });
+  raw.forEach((e,i)=>{
+    if(e.continues==="prev-page"||e.continues==="__prevpage__"){ out[i].continuesFrom="__prevpage__"; return; }
+    const c=+e.continues;
+    if(c>=1&&c<=out.length&&c-1!==i) out[i].continuesFrom=out[c-1].id; });
+  return out;
+}
+function importJSON(data,fname){
+  const pagesIn = data.pages ? data.pages : [data];
+  let applied=0;
+  pagesIn.forEach(pin=>{
+    if(pin.elements && !pin.image && page() && page().image && pagesIn.length===1){
+      // analysis-only JSON → apply to current page
+      const p=page(); snap();
+      p.elements=normElements(pin.elements);
+      p.elements.forEach((e,i)=>{ if(e.orig.idx===null) e.orig.idx=i; });
+      if(pin.label) p.label=pin.label;
+      if(pin.book){ p.book=pin.book; if(PRESETS[pin.book]) S.book=pin.book; }
+      applied++; toast("Applied "+p.elements.length+" elements to "+p.name);
+    } else {
+      const p=newPage(pin.name||fname.replace(/\.[^.]+$/,""));
+      Object.assign(p,{label:pin.label||"",source:pin.source||"",notes:pin.notes||"",
+        image:pin.image||null,w:pin.width||pin.w||0,h:pin.height||pin.h||0,
+        book:pin.book||S.book,customTypes:pin.customTypes||[]});
+      p.elements=normElements(pin.elements);
+      p.elements.forEach((e,i)=>{ if(e.orig.idx===null) e.orig.idx=i; });
+      if(PRESETS[p.book]) S.book=p.book;
+      S.pages.push(p); S.cur=S.pages.length-1; applied++;
+    }
+  });
+  if(applied){ S.sel=null; $("bookSel").value=S.book; renderAll(); save(); }
+}
+
+/* ── export ── */
+function exportPage(p,withImage){
+  return { tool:"layout-lab", schema:1, book:p.book, name:p.name, label:p.label,
+    source:p.source, notes:p.notes, width:p.w, height:p.h,
+    image:withImage?p.image:undefined, customTypes:p.customTypes,
+    elements:p.elements.map((e,i)=>({ type:e.type, order:i+1,
+      box:{x:r2(e.box.x),y:r2(e.box.y),w:r2(e.box.w),h:r2(e.box.h)},
+      side:(p.w>p.h)?((e.box.x+e.box.w/2<50)?"left":"right"):undefined,
+      continues:(()=>{ if(e.continuesFrom==="__prevpage__") return "prev-page";
+        const j=p.elements.findIndex(x=>x.id===e.continuesFrom);
+        return j>=0?j+1:undefined; })(),
+      text:e.text, note:e.note, src:e.src, orig:e.orig })) };
+}
+const r2 = n => Math.round(n*100)/100;
+
+async function saveFile(filename,data){
+  if(window.claude && window.claude.downloads){
+    try{ await window.claude.downloads.save({filename,data}); toast("Saved "+filename); return; }
+    catch(err){ if(err&&err.code==="declined") return;
+      if(err&&err.code==="rate_limited"){ toast("One download at a time — try again in a moment"); return; } }
+  }
+  try{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([data],{type:"application/octet-stream"}));
+    a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast("Downloaded "+filename);
+  }catch(err){ openModal("Copy manually",'<textarea readonly>'+escapeHtml(data)+"</textarea>",
+    [["Close",closeModal]]); }
+}
+
+/* ── profile feedback prose ── */
+function movedEnough(a,b){ return Math.abs(a.x-b.x)>2||Math.abs(a.y-b.y)>2||Math.abs(a.w-b.w)>3||Math.abs(a.h-b.h)>3; }
+function feedbackText(){
+  const lines=["# Layout profile feedback","",
+    "Book preset: "+(PRESETS[S.book]?PRESETS[S.book].name:S.book),
+    "Generated by Layout Lab v1.2 from "+S.pages.length+" reviewed page(s).",""];
+  S.pages.forEach(p=>{
+    const relabeled=[],missed=[],adjusted=[],reordered=[];
+    p.elements.forEach((e,i)=>{
+      const snip=e.text?' ("'+e.text.slice(0,60)+(e.text.length>60?"…":"")+'")':"";
+      if(e.src==="user"){ missed.push("- Claude missed a **"+typeInfo(e.type).label+"** at x"+r2(e.box.x)+"% y"+r2(e.box.y)+"%"+snip+(e.note?" — "+e.note:"")); return; }
+      if(e.orig&&e.orig.type!==e.type) relabeled.push("- The element Claude called **"+e.orig.type+"** is actually **"+e.type+"**"+snip+(e.note?" — "+e.note:""));
+      else if(e.note) relabeled.push("- **"+typeInfo(e.type).label+"**"+snip+": "+e.note);
+      if(e.orig&&movedEnough(e.orig.box,e.box)) adjusted.push("- **"+typeInfo(e.type).label+"**"+snip+" box needed adjusting (Claude drew x"+r2(e.orig.box.x)+" y"+r2(e.orig.box.y)+" w"+r2(e.orig.box.w)+" h"+r2(e.orig.box.h)+" → correct is x"+r2(e.box.x)+" y"+r2(e.box.y)+" w"+r2(e.box.w)+" h"+r2(e.box.h)+")");
+    });
+    // reading order changed only when relative order breaks — deletions shift
+    // absolute positions without re-sequencing anything
+    let prev=-1;
+    p.elements.forEach(e=>{ if(e.orig&&e.orig.idx!==null){
+      if(e.orig.idx<prev) reordered.push(e); else prev=e.orig.idx; } });
+    const removed=(p.deleted||[]).map(d=>"- The **"+d.type+"** Claude reported"+(d.text?' ("'+d.text.slice(0,60)+'")':"")+" is not a real element — remove it.");
+    const chains=p.elements.filter(e=>e.continuesFrom).map(e=>{
+      if(e.continuesFrom==="__prevpage__")
+        return "- The **"+typeInfo(e.type).label+"**"+(e.text?' ("'+e.text.slice(0,50)+'…")':"")+
+          " continues a stream that began on a PREVIOUS spread — treat its opening as a continuation, not a new element.";
+      const src=p.elements.find(x=>x.id===e.continuesFrom); if(!src) return null;
+      return "- The **"+typeInfo(src.type).label+"** flows directly into the **"+typeInfo(e.type).label+
+        "** — one content stream across two layout regions; extract as a single continuous flow.";
+    }).filter(Boolean);
+    const any=relabeled.length||missed.length||adjusted.length||removed.length||reordered.length||chains.length||p.notes;
+    lines.push("## Page "+(p.label||p.name)+(p.source?" · "+p.source:""));
+    if(!any){ lines.push("- Claude's analysis was correct as delivered.",""); return; }
+    if(relabeled.length) lines.push("**Wrong or refined labels:**",...relabeled,"");
+    if(missed.length) lines.push("**Missed elements:**",...missed,"");
+    if(removed.length) lines.push("**Phantom elements:**",...removed,"");
+    if(adjusted.length) lines.push("**Box corrections:**",...adjusted,"");
+    if(chains.length) lines.push("**Continuations:**",...chains,"");
+    if(reordered.length) lines.push("**Reading order:** "+reordered.length+" element(s) were re-sequenced; correct order is: "+p.elements.map((e,i)=>(i+1)+". "+e.type).join(" → "),"");
+    if(p.notes) lines.push("**Page notes:** "+p.notes,"");
+  });
+  return lines.join("\n");
+}
+
+/* ── rendering ── */
+function renderAll(){ renderPages(); renderCanvas(); renderList(); renderEditor(); renderLegend(); renderMeta(); }
+
+function renderPages(){
+  const host=$("pagelist"); host.innerHTML="";
+  S.pages.forEach((p,i)=>{
+    const c=document.createElement("div"); c.className="pagecard"+(i===S.cur?" cur":"");
+    c.innerHTML=(p.image?'<img alt="" src="'+p.image+'">':'<div class="noimg">no image</div>')+
+      '<div class="pname">'+escapeHtml(p.label||p.name)+'</div><button class="del" title="Remove page">×</button>';
+    c.onclick=e=>{ if(e.target.classList.contains("del")){ if(confirm("Remove this page from the session?")){
+        S.pages.splice(i,1); S.cur=Math.min(S.cur,S.pages.length-1); S.sel=null; renderAll(); save(); } return; }
+      S.cur=i; S.sel=null; if(PRESETS[p.book]) {S.book=p.book; $("bookSel").value=S.book;} renderAll(); };
+    host.appendChild(c);
+  });
+}
+
+function stageScale(){
+  const p=page(); if(!p||!p.w) return 1;
+  if(S.zoom>0) return S.zoom;
+  const vp=$("viewport");
+  return Math.min((vp.clientWidth-48)/p.w, 2);
+}
+function renderCanvas(){
+  const p=page(), stage=$("stage"), empty=$("empty");
+  if(!p||!p.image){ stage.style.display="none"; empty.style.display=p?"none":"block";
+    if(p&&!p.image) empty.style.display="block";
+    $("pageTitle").textContent=p?p.name+" (no image)":""; return; }
+  empty.style.display="none"; stage.style.display="block";
+  const sc=stageScale();
+  stage.style.width=(p.w*sc)+"px"; stage.style.height=(p.h*sc)+"px";
+  $("pageimg").src=p.image;
+  $("zoomPct").textContent=S.zoom>0?Math.round(sc*100)+"%":"fit";
+  $("pageTitle").textContent=(p.label?("p."+p.label+" · "):"")+p.name+" · "+p.elements.length+" elements";
+  const bx=$("boxes"); bx.innerHTML="";
+  const tax=taxonomy();
+  p.elements.forEach((e,i)=>{
+    const t=tax.get(e.type)||typeInfo(e.type);
+    const d=document.createElement("div");
+    d.className="box"+(e.id===S.sel?" sel":"")+(S.hidden.has(e.type)?" hid":"");
+    d.dataset.id=e.id;
+    d.style.cssText="left:"+e.box.x+"%;top:"+e.box.y+"%;width:"+e.box.w+"%;height:"+e.box.h+
+      "%;border-color:"+t.color+";background:"+t.color+"2b";
+    if(S.labels){ const tag=document.createElement("span"); tag.className="tag";
+      tag.style.background=t.color;
+      tag.textContent=(e.continuesFrom?"↳ ":"")+(i+1)+" "+t.label; d.appendChild(tag); }
+    if(e.id===S.sel) ["nw","n","ne","e","se","s","sw","w"].forEach(dir=>{
+      const h=document.createElement("div"); h.className="h "+dir; h.dataset.dir=dir;
+      h.style.borderColor=t.color; d.appendChild(h); });
+    bx.appendChild(d);
+  });
+}
+
+function renderList(){
+  const p=page(), ul=$("ellist"); ul.innerHTML="";
+  $("elCount").textContent=p?("· "+p.elements.length):"";
+  if(!p) return;
+  const tax=taxonomy();
+  p.elements.forEach((e,i)=>{
+    const t=tax.get(e.type)||typeInfo(e.type);
+    const li=document.createElement("li"); li.className=e.id===S.sel?"sel":"";
+    let contLab="";
+    if(e.continuesFrom==="__prevpage__") contLab=' <span style="color:var(--muted)">↳ prev page</span>';
+    else if(e.continuesFrom){ const n=p.elements.findIndex(x=>x.id===e.continuesFrom)+1;
+      if(n) contLab=' <span style="color:var(--muted)">↳ from #'+n+'</span>'; }
+    li.innerHTML='<span class="num" style="background:'+t.color+'">'+(i+1)+'</span>'+
+      '<span class="lab">'+escapeHtml(t.label)+(e.src==="user"?" ✚":"")+contLab+
+      '<small>'+escapeHtml(e.text.slice(0,48)||"—")+'</small></span>'+
+      '<span class="ord"><button data-mv="-1" title="Earlier in reading order">▲</button>'+
+      '<button data-mv="1" title="Later in reading order">▼</button></span>';
+    li.onclick=ev=>{
+      const mv=ev.target.dataset&&ev.target.dataset.mv;
+      if(mv){ const j=i+ +mv; if(j<0||j>=p.elements.length) return; snap();
+        [p.elements[i],p.elements[j]]=[p.elements[j],p.elements[i]]; renderAll(); save(); return; }
+      S.sel=e.id; renderAll(); };
+    ul.appendChild(li);
+  });
+}
+
+function renderEditor(){
+  const e=selEl(), ed=$("editor");
+  ed.style.display=e?"block":"none";
+  $("statSel").textContent=e?("selected: "+typeInfo(e.type).label):"";
+  if(!e) return;
+  const sel=$("edType"); sel.innerHTML="";
+  taxonomy().forEach(t=>{ const o=document.createElement("option");
+    o.value=t.key; o.textContent=t.label; sel.appendChild(o); });
+  if(![...sel.options].some(o=>o.value===e.type)){
+    const o=document.createElement("option"); o.value=e.type; o.textContent=e.type; sel.appendChild(o); }
+  sel.value=e.type;
+  const cont=$("edCont"); cont.innerHTML="";
+  const none=document.createElement("option"); none.value=""; none.textContent="— starts fresh —";
+  cont.appendChild(none);
+  const prev=document.createElement("option"); prev.value="__prevpage__";
+  prev.textContent="⇠ a previous page/spread"; cont.appendChild(prev);
+  page().elements.forEach((x,i)=>{ if(x.id!==e.id){ const o=document.createElement("option");
+    o.value=x.id; o.textContent="#"+(i+1)+" · "+typeInfo(x.type).label; cont.appendChild(o); } });
+  cont.value=e.continuesFrom||"";
+  $("edText").value=e.text; $("edNote").value=e.note;
+  ["bx","by","bw","bh"].forEach((id,i)=>$(id).value=r2([e.box.x,e.box.y,e.box.w,e.box.h][i]));
+}
+
+function renderLegend(){
+  const host=$("legend"); host.innerHTML="";
+  const p=page(); const counts={};
+  if(p) p.elements.forEach(e=>counts[e.type]=(counts[e.type]||0)+1);
+  taxonomy().forEach(t=>{
+    const l=document.createElement("label");
+    l.innerHTML='<input type="checkbox" '+(S.hidden.has(t.key)?"":"checked")+
+      '><span class="sw" style="background:'+t.color+'"></span>'+escapeHtml(t.label)+
+      '<span class="cnt">'+(counts[t.key]||"")+'</span>';
+    l.querySelector("input").onchange=ev=>{
+      ev.target.checked?S.hidden.delete(t.key):S.hidden.add(t.key); renderCanvas(); };
+    host.appendChild(l);
+  });
+}
+
+function renderMeta(){
+  const p=page();
+  $("pgLabel").value=p?p.label:""; $("pgNotes").value=p?p.notes:"";
+  $("pgLabel").disabled=$("pgNotes").disabled=!p;
+}
+
+/* ── canvas interaction ── */
+let drag=null;
+$("boxes").addEventListener("pointerdown",ev=>{
+  const p=page(); if(!p) return;
+  const stage=$("stage").getBoundingClientRect();
+  const px=(ev.clientX-stage.left)/stage.width*100, py=(ev.clientY-stage.top)/stage.height*100;
+  const handle=ev.target.closest(".h"), boxDiv=ev.target.closest(".box");
+  if(S.mode==="draw"&&!handle){
+    snap();
+    const el={id:"e"+(uid++),type:defaultType(),box:{x:px,y:py,w:0,h:0},text:"",note:"",src:"user",
+      orig:null};
+    p.elements.push(el); S.sel=el.id;
+    drag={kind:"draw",el,ox:px,oy:py};
+  } else if(handle){
+    snap(); drag={kind:"resize",el:selEl(),dir:handle.dataset.dir,start:{...selEl().box},ox:px,oy:py};
+  } else if(boxDiv){
+    const el=p.elements.find(e=>e.id===boxDiv.dataset.id);
+    if(S.sel!==el.id){ S.sel=el.id; renderAll(); }
+    snap(); drag={kind:"move",el,start:{...el.box},ox:px,oy:py};
+  } else { if(S.sel){ S.sel=null; renderAll(); } return; }
+  $("boxes").setPointerCapture(ev.pointerId);
+  ev.preventDefault();
+});
+$("boxes").addEventListener("pointermove",ev=>{
+  const p=page(); if(!p) return;
+  const stage=$("stage").getBoundingClientRect();
+  const px=(ev.clientX-stage.left)/stage.width*100, py=(ev.clientY-stage.top)/stage.height*100;
+  $("statPos").textContent=r2(px)+"% , "+r2(py)+"%";
+  if(!drag) return;
+  const dx=px-drag.ox, dy=py-drag.oy, b=drag.el.box;
+  if(drag.kind==="draw"){
+    b.x=Math.min(px,drag.ox); b.y=Math.min(py,drag.oy);
+    b.w=Math.abs(dx); b.h=Math.abs(dy);
+  } else if(drag.kind==="move"){
+    b.x=clamp(drag.start.x+dx,0,100-b.w); b.y=clamp(drag.start.y+dy,0,100-b.h);
+  } else {
+    const s=drag.start, d=drag.dir;
+    if(d.includes("e")) b.w=Math.max(.5,s.w+dx);
+    if(d.includes("s")) b.h=Math.max(.5,s.h+dy);
+    if(d.includes("w")){ b.w=Math.max(.5,s.w-dx); b.x=s.x+s.w-b.w; }
+    if(d.includes("n")){ b.h=Math.max(.5,s.h-dy); b.y=s.y+s.h-b.h; }
+  }
+  renderCanvas();
+});
+$("boxes").addEventListener("pointerup",()=>{
+  if(!drag) return;
+  if(drag.kind==="draw"&&(drag.el.box.w<.5||drag.el.box.h<.5)){
+    page().elements=page().elements.filter(e=>e!==drag.el); page().undo.pop(); S.sel=null; }
+  if(drag.kind==="draw") setMode("select");
+  drag=null; renderAll(); save();
+});
+function defaultType(){ const it=taxonomy().keys().next(); return it.done?"unknown":it.value; }
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ── editor events ── */
+$("edType").onchange=()=>{ const e=selEl(); if(!e) return; snap(); e.type=$("edType").value; renderAll(); save(); };
+$("edCont").onchange=()=>{ const e=selEl(); if(!e) return; snap();
+  e.continuesFrom=$("edCont").value||null; renderAll(); save(); };
+$("edText").onchange=()=>{ const e=selEl(); if(e){ snap(); e.text=$("edText").value; renderList(); save(); } };
+$("edNote").onchange=()=>{ const e=selEl(); if(e){ snap(); e.note=$("edNote").value; save(); } };
+["bx","by","bw","bh"].forEach((id,i)=>$(id).onchange=()=>{
+  const e=selEl(); if(!e) return; snap();
+  const k=["x","y","w","h"][i], v=parseFloat($(id).value);
+  if(!isNaN(v)) e.box[k]=clamp(v,0,100);
+  renderCanvas(); save(); });
+$("edDelete").onclick=()=>{ const p=page(),e=selEl(); if(!e) return; snap();
+  if(e.src!=="user") p.deleted.push({type:e.orig?e.orig.type:e.type,text:e.text});
+  p.elements.forEach(x=>{ if(x.continuesFrom===e.id) x.continuesFrom=null; });
+  p.elements=p.elements.filter(x=>x!==e); S.sel=null; renderAll(); save(); };
+$("pgLabel").onchange=()=>{ const p=page(); if(p){ p.label=$("pgLabel").value; renderAll(); save(); } };
+$("pgNotes").onchange=()=>{ const p=page(); if(p){ p.notes=$("pgNotes").value; save(); } };
+
+/* ── toolbar ── */
+function setMode(m){ S.mode=m; $("modeDraw").classList.toggle("on",m==="draw");
+  $("viewport").style.cursor=m==="draw"?"crosshair":""; }
+$("modeDraw").onclick=()=>setMode(S.mode==="draw"?"select":"draw");
+$("zoomIn").onclick=()=>{ S.zoom=(S.zoom||stageScale())*1.25; renderCanvas(); };
+$("zoomOut").onclick=()=>{ S.zoom=Math.max(.1,(S.zoom||stageScale())/1.25); renderCanvas(); };
+$("zoomFit").onclick=()=>{ S.zoom=0; renderCanvas(); };
+$("labelsBtn").onclick=()=>{ S.labels=!S.labels; $("labelsBtn").classList.toggle("on",S.labels); renderCanvas(); };
+$("undoBtn").onclick=undo;
+$("bookSel").onchange=()=>{ S.book=$("bookSel").value; const p=page(); if(p) p.book=S.book; renderAll(); save(); };
+
+/* ── import/export buttons ── */
+$("importBtn").onclick=$("addPageBtn").onclick=()=>$("fileInput").click();
+$("fileInput").onchange=ev=>{ importFiles(ev.target.files); ev.target.value=""; };
+$("pasteBtn").onclick=()=>openModal("Paste analysis JSON",
+  '<p style="color:var(--muted);font-size:12px">Paste a page packet or an elements-only analysis from Claude. Elements-only JSON is applied to the current page.</p><textarea id="pasteTa" placeholder=\'{"elements":[…]}\'></textarea>',
+  [["Cancel",closeModal],["Import",()=>{ try{ importJSON(JSON.parse($("pasteTa").value),"pasted"); closeModal(); }
+    catch(err){ toast("Invalid JSON: "+err.message); } },true]]);
+$("expPage").onclick=()=>{ const p=page(); if(!p) return toast("No page selected");
+  saveFile(fileBase(p)+"-layout.json", JSON.stringify(exportPage(p,false),null,2)); };
+$("expPacket").onclick=()=>{ const p=page(); if(!p) return toast("No page selected");
+  saveFile(fileBase(p)+"-packet.json", JSON.stringify(exportPage(p,true),null,2)); };
+$("expAll").onclick=()=>{ if(!S.pages.length) return toast("No pages loaded");
+  saveFile("layout-lab-session.json", JSON.stringify({tool:"layout-lab",schema:1,book:S.book,
+    pages:S.pages.map(p=>exportPage(p,false))},null,2)); };
+$("expFeedback").onclick=()=>{ if(!S.pages.length) return toast("No pages loaded");
+  const txt=feedbackText();
+  openModal("Profile feedback — paste into an improvement session",
+    '<textarea id="fbTa" readonly style="min-height:340px">'+escapeHtml(txt)+"</textarea>",
+    [["Close",closeModal],["Download .md",()=>saveFile("profile-feedback.md",txt),true],
+     ["Copy",async()=>{ try{ await navigator.clipboard.writeText(txt); toast("Copied"); }
+       catch(e){ $("fbTa").select(); document.execCommand("copy"); toast("Copied"); } },true]]); };
+$("addTypeBtn").onclick=()=>{
+  const p=page(); if(!p) return toast("Load a page first");
+  const name=prompt("New element type name (e.g. choir_note):"); if(!name) return;
+  const key=name.trim().toLowerCase().replace(/\s+/g,"_");
+  if(taxonomy().has(key)) return toast("Type already exists");
+  p.customTypes.push({key,label:name.trim(),color:PALETTE[taxonomy().size%PALETTE.length]});
+  renderAll(); save(); toast("Added type "+name); };
+
+/* ── modal / toast ── */
+function openModal(title,bodyHtml,btns){
+  $("modalTitle").textContent=title; $("modalBody").innerHTML=bodyHtml;
+  const bb=$("modalBtns"); bb.innerHTML="";
+  btns.forEach(([lab,fn,primary])=>{ const b=document.createElement("button");
+    if(primary) b.className="primary"; b.textContent=lab; b.onclick=fn; bb.appendChild(b); });
+  $("modal").classList.add("open");
+}
+function closeModal(){ $("modal").classList.remove("open"); }
+$("modal").addEventListener("click",ev=>{ if(ev.target.id==="modal") closeModal(); });
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2600); }
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fileBase(p){ return (p.label?("p"+p.label.replace(/[^\w-]+/g,"_")):p.name.replace(/[^\w-]+/g,"_")); }
+
+/* ── keyboard ── */
+document.addEventListener("keydown",ev=>{
+  const inField=/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
+  if((ev.metaKey||ev.ctrlKey)&&ev.key==="z"&&!inField){ ev.preventDefault(); undo(); return; }
+  if(inField) return;
+  if(ev.key==="d"||ev.key==="D"){ setMode(S.mode==="draw"?"select":"draw"); return; }
+  const e=selEl(); if(!e) return;
+  if(ev.key==="Escape"){ S.sel=null; renderAll(); return; }
+  if(ev.key==="Delete"||ev.key==="Backspace"){ ev.preventDefault(); $("edDelete").onclick(); return; }
+  const step=ev.shiftKey?1:.2; let hit=true;
+  if(ev.key==="ArrowLeft") e.box.x=clamp(e.box.x-step,0,100-e.box.w);
+  else if(ev.key==="ArrowRight") e.box.x=clamp(e.box.x+step,0,100-e.box.w);
+  else if(ev.key==="ArrowUp") e.box.y=clamp(e.box.y-step,0,100-e.box.h);
+  else if(ev.key==="ArrowDown") e.box.y=clamp(e.box.y+step,0,100-e.box.h);
+  else hit=false;
+  if(hit){ ev.preventDefault(); renderCanvas(); renderEditor(); save(); }
+});
+window.addEventListener("resize",()=>{ if(S.zoom===0) renderCanvas(); });
+
+/* ── drag & drop ── */
+["dragover","drop"].forEach(evt=>window.addEventListener(evt,ev=>{
+  ev.preventDefault();
+  if(evt==="drop"&&ev.dataTransfer&&ev.dataTransfer.files.length) importFiles(ev.dataTransfer.files);
+}));
+
+/* ── autosave ── */
+let saveT;
+function save(){
+  clearTimeout(saveT);
+  saveT=setTimeout(()=>{
+    try{
+      const slim={book:S.book,pages:S.pages.map(p=>({...p,undo:[]}))};
+      localStorage.setItem("layoutlab",JSON.stringify(slim));
+      $("statSave").textContent="autosaved";
+    }catch(err){
+      try{ const noimg={book:S.book,pages:S.pages.map(p=>({...p,image:null,undo:[]}))};
+        localStorage.setItem("layoutlab",JSON.stringify(noimg));
+        $("statSave").textContent="autosaved (boxes only — images too large)";
+      }catch(e2){ $("statSave").textContent="autosave unavailable"; }
+    }
+  },600);
+}
+function restore(){
+  try{
+    const raw=localStorage.getItem("layoutlab"); if(!raw) return;
+    const s=JSON.parse(raw); if(!s.pages||!s.pages.length) return;
+    S.book=PRESETS[s.book]?s.book:"generic";
+    S.pages=s.pages.map(p=>({...p,undo:[],deleted:p.deleted||[],customTypes:p.customTypes||[]}));
+    S.pages.forEach(p=>{ const idmap={};
+      p.elements.forEach(e=>{ idmap[e.id]="e"+(uid++); e.id=idmap[e.id]; });
+      p.elements.forEach(e=>{ if(e.continuesFrom&&e.continuesFrom!=="__prevpage__")
+        e.continuesFrom=idmap[e.continuesFrom]||null; }); });
+    S.cur=0;
+    toast("Restored previous session ("+S.pages.length+" page"+(S.pages.length>1?"s":"")+")");
+  }catch(err){}
+}
+
+/* ── init ── */
+(function init(){
+  const sel=$("bookSel");
+  Object.entries(PRESETS).forEach(([k,v])=>{ const o=document.createElement("option");
+    o.value=k; o.textContent=v.name; sel.appendChild(o); });
+  restore();
+  sel.value=S.book;
+  renderAll();
+})();
+</script>
